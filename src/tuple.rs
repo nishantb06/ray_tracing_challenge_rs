@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::ops::{Add,Sub};
 use crate::utils::{equal};
 
 #[derive(Debug, PartialEq)]
@@ -48,6 +48,22 @@ impl Add for &Tuple {
     }
 }
 
+impl Sub for &Tuple {
+    type Output = Tuple;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        if self.w == 0.0 && rhs.w == 1.0 {
+            panic!("Cannot subtract a point from a vector");
+        }
+        Tuple {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+            w: self.w - rhs.w,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +103,35 @@ mod tests {
 
     #[test]
     fn subtracting_two_points() {
-        let p1 = Tuple::point()
+        let p1 = Tuple::point(3.0, 2.0, 1.0);
+        let p2 = Tuple::point(5.0, 6.0, 7.0);
+        let expected = Tuple::vector(-2.0, -4.0, -6.0);
+        assert!((&p1 - &p2).is_equal(&expected));
+        assert!(p1.sub(&p2).is_equal(&expected));
+    }
+
+    #[test]
+    fn subtracting_two_vectors() {
+        let v1 = Tuple::vector(3.0, 2.0, 1.0);
+        let v2 = Tuple::vector(5.0, 6.0, 7.0);
+        let expected = Tuple::vector(-2.0, -4.0, -6.0);
+        assert!((&v1 - &v2).is_equal(&expected))
+    }
+
+    #[test]
+    fn subtracting_vector_from_point() {
+        let p = Tuple::point(3.0, 2.0, 1.0);
+        let v = Tuple::vector(5.0, 6.0, 7.0);
+        let expected = Tuple::point(-2.0, -4.0, -6.0);
+        assert!((&p - &v).is_equal(&expected))
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot subtract a point from a vector")]
+    fn subtracting_point_from_vector() {
+        let p = Tuple::point(3.0, 2.0, 1.0);
+        let v = Tuple::vector(5.0, 6.0, 7.0);
+        // let expected = Tuple::point(-2.0, -4.0, -6.0);
+        let _ = &v - &p;
     }
 }
