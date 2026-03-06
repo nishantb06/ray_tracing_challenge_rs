@@ -48,6 +48,19 @@ impl Tuple {
             w: 0.0,
         }
     }
+
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w
+    }
+
+    pub fn cross(&self, other: &Self) -> Self {
+        Tuple {
+            x: self.y * other.z - self.z * other.y,
+            y: self.z * other.x - self.x * other.z,
+            z: self.x * other.y - self.y * other.x,
+            w: 0.0,
+        }
+    }
 }
 
 impl Add for &Tuple {
@@ -266,5 +279,21 @@ mod tests {
         let v = Tuple::vector(1.0, 2.0, 3.0);
         let n = v.normalize();
         assert!(crate::utils::equal(n.magnitude(), 1.0));
+    }
+
+    #[test]
+    fn dot_product_of_two_vectors() {
+        let a = Tuple::vector(1.0, 2.0, 3.0);
+        let b = Tuple::vector(2.0, 3.0, 4.0);
+        assert!(crate::utils::equal(a.dot(&b), 20.0));
+    }
+
+    #[test]
+    fn cross_product_of_two_vectors() {
+        let a = Tuple::vector(1.0, 2.0, 3.0);
+        let b = Tuple::vector(2.0, 3.0, 4.0);
+        let expected = Tuple::vector(-1.0, 2.0, -1.0);
+        assert!((&a.cross(&b)).is_equal(&expected));
+        assert!((&b.cross(&a)).is_equal(&(-&expected)));
     }
 }
