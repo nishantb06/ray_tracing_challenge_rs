@@ -194,3 +194,75 @@ impl Add for Tuple {
 That forces callers to handle `Result` and can fail at runtime instead of compile time.
 
 **Recommendation:** Use separate `Point` and `Vector` types and implement `Add` only for the valid combinations so invalid additions are rejected by the compiler.
+
+---------------------
+---------------------
+
+Implementing both gives you flexibility in how you call negation, but they are not interchangeable in terms of ownership.
+
+## Difference
+
+| Implementation | Call | What happens |
+|----------------|------|--------------|
+| `impl Neg for Tuple` | `-t` | `t` is moved into `neg()` and consumed |
+| `impl Neg for &Tuple` | `-&t` | `t` is borrowed; it stays valid afterward |
+
+## When each is used
+
+**`Neg for Tuple`** – for owned values:
+```rust
+let t = Tuple::vector(1.0, 2.0, 3.0);
+let negated = -t;   // t is moved, gone
+// t is no longer usable here
+```
+
+**`Neg for &Tuple`** – when you want to keep the original:
+```rust
+let t = Tuple::vector(1.0, 2.0, 3.0);
+let negated = -&t;  // t is borrowed
+// t is still usable here
+```
+
+## Do you need both?
+
+Usually one is enough:
+
+- If `Tuple` is `Copy`, `impl Neg for Tuple` is enough: `-t` copies `t` into `neg()`, and the original is still usable because of `Copy`.
+- If `Tuple` is not `Copy`, `impl Neg for &Tuple` is often better so you can write `-&t` without moving.
+
+## Summary
+
+- Both produce the same `Tuple` result.
+- They differ in whether the input is consumed or borrowed.
+- With `Copy`, `Neg for Tuple` alone is typically sufficient.
+- Without `Copy`, `Neg for &Tuple` is usually the better choice so you can keep the original value.
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------

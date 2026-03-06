@@ -1,4 +1,4 @@
-use std::ops::{Add,Sub};
+use std::ops::{Add,Sub,Neg};
 use crate::utils::{equal};
 
 #[derive(Debug, PartialEq)]
@@ -60,6 +60,19 @@ impl Sub for &Tuple {
             y: self.y - rhs.y,
             z: self.z - rhs.z,
             w: self.w - rhs.w,
+        }
+    }
+}
+
+impl Neg for &Tuple {
+    type Output = Tuple;
+
+    fn neg(self) -> Self::Output {
+        Tuple {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+            w: -self.w,
         }
     }
 }
@@ -133,5 +146,13 @@ mod tests {
         let v = Tuple::vector(5.0, 6.0, 7.0);
         // let expected = Tuple::point(-2.0, -4.0, -6.0);
         let _ = &v - &p;
+    }
+
+    #[test]
+    fn negating_a_tuple() {
+        let a = Tuple::new(1.0, -2.0, 3.0, -4.0);
+        let expected = Tuple::new(-1.0, 2.0, -3.0, 4.0);
+        assert!((&a.neg()).is_equal(&expected));
+        assert!((-&a).is_equal(&expected));
     }
 }
