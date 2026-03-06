@@ -1,4 +1,4 @@
-use std::ops::{Add,Sub,Neg};
+use std::ops::{Add,Sub,Neg,Div,Mul};
 use crate::utils::{equal};
 
 #[derive(Debug, PartialEq)]
@@ -73,6 +73,45 @@ impl Neg for &Tuple {
             y: -self.y,
             z: -self.z,
             w: -self.w,
+        }
+    }
+}
+
+// Tuple * scalar
+impl Mul<f64> for &Tuple {
+    type Output = Tuple;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Tuple {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+            w: self.w * rhs,
+        }
+    }
+}
+
+// scalar * Tuple (so you can write 2.0 * t)
+impl Mul<&Tuple> for f64 {
+    type Output = Tuple;
+
+    fn mul(self, rhs: &Tuple) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl Div<f64> for &Tuple {
+    type Output = Tuple;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        if rhs == 0.0 {
+            panic!("Attempted to divide tuple by zero");
+        }
+        Tuple {
+            x: self.x / rhs,
+            y: self.y / rhs,
+            z: self.z / rhs,
+            w: self.w / rhs,
         }
     }
 }
@@ -154,5 +193,33 @@ mod tests {
         let expected = Tuple::new(-1.0, 2.0, -3.0, 4.0);
         assert!((&a.neg()).is_equal(&expected));
         assert!((-&a).is_equal(&expected));
+    }
+
+    #[test]
+    fn multiplying_tuple_by_scalar() {
+        let a = Tuple::new(1.0, -2.0, 3.0, -4.0);
+        let expected = Tuple::new(3.5, -7.0, 10.5, -14.0);
+        assert!((&a * 3.5).is_equal(&expected));
+    }
+
+    #[test]
+    fn multiplying_tuple_by_fraction() {
+        let a = Tuple::new(1.0, -2.0, 3.0, -4.0);
+        let expected = Tuple::new(0.5, -1.0, 1.5, -2.0);
+        assert!((&a * 0.5).is_equal(&expected));
+    }
+
+    #[test]
+    fn dividing_tuple_by_scalar() {
+        let a = Tuple::new(1.0, -2.0, 3.0, -4.0);
+        let expected = Tuple::new(0.5, -1.0, 1.5, -2.0);
+        assert!((&a / 2.0).is_equal(&expected));
+    }
+
+    #[test]
+    #[should_panic(expected = "Attempted to divide tuple by zero")]
+    fn dividing_tuple_by_zero() {
+        let a = Tuple::new(1.0, -2.0, 3.0, -4.0);
+        let _ = &a / 0.0;
     }
 }
