@@ -1,12 +1,18 @@
 use std::ops::{Add, Sub, Mul};
 use crate::utils::equal;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)]
 pub struct Color {
     pub red: f64,
     pub green: f64,
     pub blue: f64,
+}
+
+pub struct Canvas {
+    pub width: usize,
+    pub height: usize,
+    pub pixels: Vec<Color>,
 }
 
 #[allow(dead_code)]
@@ -64,6 +70,29 @@ impl Mul for &Color {
     }
 }
 
+impl Canvas {
+    pub fn new(width: usize, height: usize) -> Self {
+        Self { width, height, pixels: vec![Color::new(0.0, 0.0, 0.0); width * height] }
+    }
+
+    /// Writes a color to the pixel at (x, y).
+    /// x is the column (0..width), y is the row (0..height).
+    pub fn write_pixel(&mut self, x: usize, y: usize, color: Color) {
+        let idx = y * self.width + x;
+        self.pixels[idx] = color;
+    }
+
+    /// Returns the color at pixel (x, y).
+    pub fn pixel_at(&self, x: usize, y: usize) -> &Color {
+        let idx = y * self.width + x;
+        &self.pixels[idx]
+    }
+
+    pub fn canvas_to_ppm(&self) -> String {
+        format!("P3\n{} {}\n255\n", self.width, self.height)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,5 +134,34 @@ mod tests {
         let c2 = Color::new(0.9, 1.0, 0.1);
         let expected = Color::new(0.9, 0.2, 0.04);
         assert!((&c1 * &c2).is_equal(&expected));
+    }
+
+    #[test]
+    fn creating_a_canvas() {
+        let c = Canvas::new(10, 20);
+        assert_eq!(c.width, 10);
+        assert_eq!(c.height, 20);
+        let black = Color::new(0.0, 0.0, 0.0);
+        for pixel in &c.pixels {
+            assert!(pixel.is_equal(&black), "every pixel should be color(0, 0, 0)");
+        }
+    }
+
+    #[test]
+    fn writing_pixels_to_canvas() {
+        let mut c = Canvas::new(10, 20);
+        let red = Color::new(1.0, 0.0, 0.0);
+        c.write_pixel(2, 3, red.clone());
+        assert!(c.pixel_at(2, 3).is_equal(&red));
+    }
+
+    #[test]
+    fn constructing_the_ppm_header() {
+        let c = Canvas::new(5, 3);
+        let ppm = c.canvas_to_ppm();
+        let lines: Vec<&str> = ppm.lines().collect();
+        assert_eq!(lines[0], "P3");
+        assert_eq!(lines[1], "5 3");
+        assert_eq!(lines[2], "255");
     }
 }
