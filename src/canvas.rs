@@ -88,8 +88,48 @@ impl Canvas {
         &self.pixels[idx]
     }
 
+    /// Converts a color component from [0, 1] to [0, 255], clamped.
+    fn scale_component(c: f64) -> u8 {
+        let scaled = (c * 255.0).round();
+        scaled.clamp(0.0, 255.0) as u8
+    }
+
     pub fn canvas_to_ppm(&self) -> String {
-        format!("P3\n{} {}\n255\n", self.width, self.height)
+        const MAX_COLOR: u8 = 255;
+        const MAX_LINE_LEN: usize = 70;
+    
+        let mut out = format!("P3\n{} {}\n{}\n", self.width, self.height, MAX_COLOR);
+    
+        let mut line_len = 0;
+    
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let pixel = &self.pixels[y * self.width + x];
+                let r = Self::scale_component(pixel.red).to_string();
+                let g = Self::scale_component(pixel.green).to_string();
+                let b = Self::scale_component(pixel.blue).to_string();
+    
+                for val in [&r, &g, &b] {
+                    let addition = if line_len == 0 { val.len() } else { 1 + val.len() };
+    
+                    if line_len > 0 && line_len + addition > MAX_LINE_LEN {
+                        out.push('\n');
+                        line_len = 0;
+                    }
+                    if line_len > 0 {
+                        out.push(' ');
+                        line_len += 1;
+                    }
+                    out.push_str(val);
+                    line_len += val.len();
+                }
+            }
+            // Each row is terminated by a newline
+            out.push('\n');
+            line_len = 0;
+        }
+    
+        out
     }
 }
 
@@ -163,5 +203,45 @@ mod tests {
         assert_eq!(lines[0], "P3");
         assert_eq!(lines[1], "5 3");
         assert_eq!(lines[2], "255");
+    }
+
+    #[test]
+    fn constructing_the_ppm_pixel_data() {
+        let mut c = Canvas::new(5, 3);
+        let c1 = Color::new(1.5, 0.0, 0.0);
+        let c2 = Color::new(0.0, 0.5, 0.0);
+        let c3 = Color::new(-0.5, 0.0, 1.0);
+        c.write_pixel(0, 0, c1);
+        c.write_pixel(2, 1, c2);
+        c.write_pixel(4, 2, c3);
+        let ppm = c.canvas_to_ppm();
+        let lines: Vec<&str> = ppm.lines().collect();
+        assert_eq!(lines[3], "255 0 0 0 0 0 0 0 0 0 0 0 0 0 0");
+        assert_eq!(lines[4], "0 0 0 0 0 0 0 128 0 0 0 0 0 0 0");
+        assert_eq!(lines[5], "0 0 0 0 0 0 0 0 0 0 0 0 0 0 255");
+    }
+
+    #[test]
+    fn splitting_long_lines_in_ppm_files() {
+        let mut c = Canvas::new(10, 2);
+        let color = Color::new(1.0, 0.8, 0.6);
+        for y in 0..c.height {
+            for x in 0..c.width {
+                c.write_pixel(x, y, color.clone());
+            }
+        }
+        let ppm = c.canvas_to_ppm();
+        let lines: Vec<&str> = ppm.lines().collect();
+        assert_eq!(lines[3], "255 204 153 255 204 153 255 204 153 255 204 153 255 204 153 255 204");
+        assert_eq!(lines[4], "153 255 204 153 255 204 153 255 204 153 255 204 153");
+        assert_eq!(lines[5], "255 204 153 255 204 153 255 204 153 255 204 153 255 204 153 255 204");
+        assert_eq!(lines[6], "153 255 204 153 255 204 153 255 204 153 255 204 153");
+    }
+
+    #[test]
+    fn ppm_files_are_terminated_by_newline() {
+        let c = Canvas::new(5, 3);
+        let ppm = c.canvas_to_ppm();
+        assert!(ppm.ends_with('\n'), "PPM should end with a newline character");
     }
 }
