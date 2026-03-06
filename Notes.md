@@ -240,9 +240,237 @@ Usually one is enough:
 ---------------------
 ---------------------
 
+`hypot` computes the length of a vector in a way that avoids overflow and underflow better than the naive formula.
+
+## What is `hypot`?
+
+`hypot` stands for **hypotenuse**. For two numbers it computes:
+
+```
+hypot(x, y) = √(x² + y²)
+```
+
+In Rust, `f64::hypot(self, other)` does this for two floats. For more dimensions you chain it:
+
+```rust
+x.hypot(y).hypot(z).hypot(w)  // √(x² + y² + z² + w²)
+```
+
+## Why the naive formula can fail
+
+Naive approach:
+
+```rust
+(x*x + y*y + z*z).sqrt()
+```
+
+Problems:
+
+### 1. Overflow
+
+If components are large, squaring can overflow before `sqrt`:
+
+```rust
+let x = 1e200_f64;
+x * x  // 1e400 — overflows f64 (max ~1.8e308)
+```
+
+So `x² + y² + z²` can become `inf`, and the result is wrong.
+
+### 2. Underflow
+
+If components are very small, squaring can underflow to 0:
+
+```rust
+let x = 1e-200_f64;
+x * x  // 1e-400 — underflows to 0
+```
+
+Then the computed length is too small or zero.
+
+## How `hypot` improves this
+
+`hypot` uses a scaled formulation. For two values:
+
+1. Take the larger magnitude: `m = max(|x|, |y|)`
+2. If `m == 0`, return 0
+3. Otherwise compute: `m * √((x/m)² + (y/m)²)`
+
+Because `|x/m| ≤ 1` and `|y/m| ≤ 1`, their squares stay in a safe range, so you avoid overflow and reduce underflow.
+
+## Example
+
+```rust
+// Large values — naive can overflow
+let x = 1e200;
+let y = 1e200;
+
+// Naive: x² + y² overflows
+// let naive = (x*x + y*y).sqrt();  // inf
+
+// hypot: scales first, stays finite
+let stable = x.hypot(y);  // ~1.414e200 ✓
+```
+
+## When it matters
+
+- For typical ray-tracing values (roughly -1000 to 1000), the naive formula is usually fine.
+- `hypot` matters when:
+  - Components can be very large (e.g. far from origin)
+  - Components can be very small (e.g. near zero)
+  - You want more robust behavior across a wide range of scales
+
+## Summary
+
+| Approach | Formula | Overflow/underflow risk |
+|----------|---------|---------------------------|
+| Naive    | `√(x² + y² + z²)` | Higher for extreme values |
+| `hypot`  | Scaled computation | Lower, more stable |
+
+For most ray tracers, `(x*x + y*y + z*z).sqrt()` is acceptable; `hypot` is useful when you care about numerical robustness across a wide range of magnitudes.
+
 ---------------------
 ---------------------
 
+Here are practical ways to cache magnitude and normalized vector in Rust.
+
+## 1. Interior mutability with `Cell` and `RefCell`
+
+Use `Cell` for `f64` and `RefCell` for `Tuple`:
+
+```rust
+use std::cell::{Cell, RefCell};
+
+pub struct Tuple {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+    magnitude_cache: Cell<Option<f64>>,
+    normalized_cache: RefCell<Option<Tuple>>,
+}
+
+impl Tuple {
+    pub fn new(x: f64, y: f64, z: f64, w: f64) -> Self {
+        Self {
+            x, y, z, w,
+            magnitude_cache: Cell::new(None),
+            normalized_cache: RefCell::new(None),
+        }
+    }
+
+    pub fn magnitude(&self) -> f64 {
+        if let Some(m) = self.magnitude_cache.get() {
+            return m;
+        }
+        let m = self.x.hypot(self.y).hypot(self.z).hypot(self.w);
+        self.magnitude_cache.set(Some(m));
+        m
+    }
+
+    pub fn normalize(&self) -> Tuple {
+        if let Some(ref n) = *self.normalized_cache.borrow() {
+            return n.clone();  // or return copy if Tuple is Copy
+        }
+        let mag = self.magnitude();
+        let n = Tuple {
+            x: self.x / mag,
+            y: self.y / mag,
+            z: self.z / mag,
+            w: self.w / mag,
+        };
+        self.normalized_cache.replace(Some(n.clone()));
+        n
+    }
+}
+```
+
+You need `Clone` on `Tuple` for `normalized_cache`. If `Tuple` is `Copy`, you can use `Cell<Option<Tuple>>` instead of `RefCell`.
+
+## 2. Separate cached wrapper
+
+Keep `Tuple` unchanged and add a wrapper that caches:
+
+```rust
+pub struct CachedVector {
+    inner: Tuple,
+    magnitude_cache: Cell<Option<f64>>,
+    normalized_cache: RefCell<Option<Tuple>>,
+}
+
+impl CachedVector {
+    pub fn from_tuple(t: Tuple) -> Self {
+        Self {
+            inner: t,
+            magnitude_cache: Cell::new(None),
+            normalized_cache: RefCell::new(None),
+        }
+    }
+
+    pub fn magnitude(&self) -> f64 {
+        if let Some(m) = self.magnitude_cache.get() {
+            return m;
+        }
+        let m = self.inner.magnitude();  // or compute here
+        self.magnitude_cache.set(Some(m));
+        m
+    }
+    // ...
+}
+```
+
+## 3. `once_cell` / `std::sync::OnceLock` (Rust 1.70+)
+
+For one-time computation per value:
+
+```rust
+use std::sync::OnceLock;
+
+pub struct Tuple {
+    pub x: f64, pub y: f64, pub z: f64, pub w: f64,
+    magnitude_cache: OnceLock<f64>,
+    normalized_cache: OnceLock<Tuple>,
+}
+
+impl Tuple {
+    pub fn magnitude(&self) -> f64 {
+        *self.magnitude_cache.get_or_init(|| {
+            self.x.hypot(self.y).hypot(self.z).hypot(self.w)
+        })
+    }
+
+    pub fn normalize(&self) -> &Tuple {
+        self.normalized_cache.get_or_init(|| {
+            let mag = self.magnitude();
+            Tuple {
+                x: self.x / mag,
+                y: self.y / mag,
+                z: self.z / mag,
+                w: self.w / mag,
+            }
+        })
+    }
+}
+```
+
+`OnceLock` is thread-safe and only computes once. It returns a reference, so you don’t need `Clone` on `Tuple`.
+
+## Trade-offs
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| `Cell`/`RefCell` in `Tuple` | Simple, per-instance cache | Changes `Tuple`, needs `Clone` for `Tuple` in cache |
+| `CachedVector` wrapper | `Tuple` stays unchanged | Extra type, conversion at boundaries |
+| `OnceLock` | Thread-safe, no `Clone` | Slightly more overhead, returns `&Tuple` |
+
+## Recommendation
+
+For ray tracing, magnitude and normalization are cheap (a few ops per call). Caching usually isn’t worth the extra complexity unless profiling shows these as hot spots.
+
+If you do cache:
+
+- Use `OnceLock` if you’re on Rust 1.70+ and want a clean API.
+- Use `Cell`/`RefCell` if you need to keep compatibility with older Rust or want owned `Tuple` from `normalize()`.
 ---------------------
 ---------------------
 

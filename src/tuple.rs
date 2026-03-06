@@ -30,6 +30,24 @@ impl Tuple {
             && equal(self.x, other.x)
             && equal(self.x, other.x)
     }
+
+    pub fn magnitude(&self) -> f64 {
+        debug_assert!(self.w == 0.0, "magnitude is typically for vectors (w=0)");
+        self.x.hypot(self.y).hypot(self.z)
+    }
+
+    pub fn normalize(&self) -> Self {
+        let mag = self.magnitude();
+        debug_assert!(self.w == 0.0, "normalize should only be called on vectors (w = 0.0)");
+        debug_assert!(mag >= crate::utils::EPSILON, "Cannot normalize zero vector");
+        assert!(mag >= crate::utils::EPSILON, "Cannot normalize zero vector");
+        Tuple {
+            x: self.x / mag,
+            y: self.y / mag,
+            z: self.z / mag,
+            w: 0.0,
+        }
+    }
 }
 
 impl Add for &Tuple {
@@ -221,5 +239,32 @@ mod tests {
     fn dividing_tuple_by_zero() {
         let a = Tuple::new(1.0, -2.0, 3.0, -4.0);
         let _ = &a / 0.0;
+    }
+
+    #[test]
+    fn magnitude_of_vector() {
+        let v = Tuple::vector(1.0, 0.0, 0.0);
+        assert!(crate::utils::equal(v.magnitude(), 1.0));
+    }
+    
+    #[test]
+    fn magnitude_of_vector_123() {
+        let v = Tuple::vector(1.0, 2.0, 3.0);
+        assert!(crate::utils::equal(v.magnitude(), 14.0_f64.sqrt()));
+    }
+    
+    #[test]
+    fn normalize_vector() {
+        let v = Tuple::vector(4.0, 0.0, 0.0);
+        let n = v.normalize();
+        let expected = Tuple::vector(1.0, 0.0, 0.0);
+        assert!(n.is_equal(&expected));
+    }
+    
+    #[test]
+    fn normalized_vector_has_magnitude_one() {
+        let v = Tuple::vector(1.0, 2.0, 3.0);
+        let n = v.normalize();
+        assert!(crate::utils::equal(n.magnitude(), 1.0));
     }
 }
