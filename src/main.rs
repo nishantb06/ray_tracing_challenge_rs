@@ -1,6 +1,6 @@
 mod tuple;
 mod utils;
-
+mod canvas;
 use tuple::Tuple;
 
 fn main() {
