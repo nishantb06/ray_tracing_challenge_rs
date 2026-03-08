@@ -1,4 +1,4 @@
-// use crate::utils::{equal};
+use crate::utils::{equal};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -38,6 +38,22 @@ impl Matrix {
             columns,
             data: matrix,
         }
+    }
+}
+
+impl PartialEq for Matrix {
+    fn eq(&self, other: &Self) -> bool {
+        if self.rows != other.rows || self.columns != other.columns {
+            return false;
+        }
+        for i in 0..self.rows as usize {
+            for j in 0..self.columns as usize {
+                if !equal(self.data[i][j], other.data[i][j]) {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 
@@ -94,4 +110,34 @@ mod tests {
         assert_eq!(m.data[2][2], 1.0);   // M[2,2]
     }
 
+    #[test]
+    fn matrix_equality_with_identical_matrices() {
+        let data = vec![
+            1.0, 2.0, 3.0, 4.0,
+            5.0, 6.0, 7.0, 8.0,
+            9.0, 8.0, 7.0, 6.0,
+            5.0, 4.0, 3.0, 2.0,
+        ];
+        let m1 = Matrix::new_with_data(4, 4, data.clone());
+        let m2 = Matrix::new_with_data(4, 4, data);
+        assert!(&m1 == &m2);
+        assert!(m1 == m2);
+    }
+
+    #[test]
+    fn matrix_equality_with_different_matrices() {
+        let a = Matrix::new_with_data(4, 4, vec![
+            1.0, 2.0, 3.0, 4.0,
+            5.0, 6.0, 7.0, 8.0,
+            9.0, 8.0, 7.0, 6.0,
+            5.0, 4.0, 3.0, 2.0,
+        ]);
+        let b = Matrix::new_with_data(4, 4, vec![
+            2.0, 3.0, 4.0, 5.0,
+            6.0, 7.0, 8.0, 9.0,
+            8.0, 7.0, 6.0, 5.0,
+            4.0, 3.0, 2.0, 1.0,
+        ]);
+        assert!(a != b);
+    }
 }
