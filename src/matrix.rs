@@ -41,6 +41,45 @@ impl Matrix {
             data: matrix,
         }
     }
+
+    pub fn identity(size: usize) -> Self {
+        let mut m = Matrix::new(size, size);
+        for i in 0..size {
+            m.data[i][i] = 1.0;
+        }
+        m
+    }
+
+    pub fn transpose(&self) -> Self {
+        let mut result = Matrix::new(self.columns, self.rows);
+        for i in 0..self.rows {
+            for j in 0..self.columns {
+                result.data[j][i] = self.data[i][j];
+            }
+        }
+        result
+    }
+
+    pub fn transpose_owned(self) -> Self {
+        let mut result = Matrix::new(self.columns, self.rows);
+        for i in 0..self.rows {
+            for j in 0..self.columns {
+                result.data[j][i] = self.data[i][j];
+            }
+        }
+        result
+    }
+
+    pub fn transpose_in_place(&mut self) {
+        assert_eq!(self.rows, self.columns, "In-place transpose only works for square matrices");
+        for i in 0..self.rows {
+            for j in (i + 1)..self.columns {
+                let tmp = self.data[i][j];
+                self.data[i][j] = self.data[j][i];
+                self.data[j][i] = tmp;
+            }
+        }
+    }
 }
 
 impl PartialEq for Matrix {
@@ -266,5 +305,50 @@ mod tests {
         ]);
         let expected = Tuple::new(29.0, 28.0, 23.0, 12.0);
         assert!((&a * &b).is_equal(&expected));
+    }
+
+    #[test]
+    fn multiplying_matrix_by_identity_matrix() {
+        let a = Matrix::new_with_data(4, 4, vec![
+            0.0, 1.0,  2.0,  4.0,
+            1.0, 2.0,  4.0,  8.0,
+            2.0, 4.0,  8.0, 16.0,
+            4.0, 8.0, 16.0, 32.0,
+        ]);
+        let identity = Matrix::identity(4);
+        assert!(&a * &identity == a);
+    }
+    
+    #[test]
+    fn multiplying_identity_matrix_by_tuple() {
+        let identity = Matrix::identity(4);
+        let a = Tuple::new(1.0, 2.0, 3.0, 4.0);
+        let expected = Tuple::new(1.0, 2.0, 3.0, 4.0);
+        assert!((&identity * &a).is_equal(&expected));
+    }
+
+    #[test]
+    fn transposing_a_matrix() {
+        let a = Matrix::new_with_data(4, 4, vec![
+            0.0, 9.0, 3.0, 0.0,
+            9.0, 8.0, 0.0, 8.0,
+            1.0, 8.0, 5.0, 3.0,
+            0.0, 0.0, 5.0, 8.0,
+        ]);
+        let expected = Matrix::new_with_data(4, 4, vec![
+            0.0, 9.0, 1.0, 0.0,
+            9.0, 8.0, 8.0, 0.0,
+            3.0, 0.0, 5.0, 5.0,
+            0.0, 8.0, 3.0, 8.0,
+        ]);
+        let a_t = a.transpose();
+        assert!(a_t == expected);
+        // a is still valid after transpose
+        assert!(a == Matrix::new_with_data(4, 4, vec![
+            0.0, 9.0, 3.0, 0.0,
+            9.0, 8.0, 0.0, 8.0,
+            1.0, 8.0, 5.0, 3.0,
+            0.0, 0.0, 5.0, 8.0,
+        ]));
     }
 }
