@@ -1,16 +1,17 @@
 use crate::utils::{equal};
+use std::ops::Mul;
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Matrix {
-    pub rows: i32,
-    pub columns: i32,
+    pub rows: usize,
+    pub columns: usize,
     pub data: Vec<Vec<f64>>
 }
 
 #[allow(dead_code)]
 impl Matrix {
-    pub fn new(rows: i32, columns: i32) -> Self {
+    pub fn new(rows: usize, columns: usize) -> Self {
         Matrix{
             rows,
             columns,
@@ -18,7 +19,7 @@ impl Matrix {
         }
     }
 
-    pub fn new_with_data(rows: i32, columns: i32, data: Vec<f64>) -> Self{
+    pub fn new_with_data(rows: usize, columns: usize, data: Vec<f64>) -> Self{
         assert_eq!(
             data.len(),
             (rows * columns) as usize,
@@ -54,6 +55,48 @@ impl PartialEq for Matrix {
             }
         }
         true
+    }
+}
+
+impl Mul for &Matrix {
+    type Output = Matrix;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        // validate dimensions: self.columns must equal rhs.rows
+        if self.columns != rhs.rows {
+            panic!(
+                "Cannot multiply matrices: left is {}x{}, right is {}x{}",
+                self.rows, self.columns, rhs.rows, rhs.columns
+            )
+        }
+        // pick one row from the lhs and take the weighted sum of the rows of the rhs 
+        // considering the values from the choses row in lhs as weights
+        // the resulting row will be inserted into the final matrix.
+
+
+        let mut final_matrix: Vec<Vec<f64>> = Vec::new();
+
+        for r in 0..self.rows {
+            let mut new_row = vec![0.0; rhs.columns as usize];
+
+            for i in 0..self.columns {
+                let multiplier = self.data[r][i];
+                let row = &rhs.data[i];
+
+                for j in 0..rhs.columns {
+                    let val = row[j];
+                    new_row[j] += multiplier * val;
+                }
+            }
+
+            final_matrix.push(new_row);
+        }
+
+        return Matrix::new_with_data(
+            self.rows,
+            rhs.columns,
+            final_matrix.into_iter().flatten().collect()
+        );
     }
 }
 
@@ -139,5 +182,28 @@ mod tests {
             4.0, 3.0, 2.0, 1.0,
         ]);
         assert!(a != b);
+    }
+
+    #[test]
+    fn multiplying_two_matrices() {
+        let a = Matrix::new_with_data(4, 4, vec![
+            1.0, 2.0, 3.0, 4.0,
+            5.0, 6.0, 7.0, 8.0,
+            9.0, 8.0, 7.0, 6.0,
+            5.0, 4.0, 3.0, 2.0,
+        ]);
+        let b = Matrix::new_with_data(4, 4, vec![
+            -2.0, 1.0, 2.0, 3.0,
+             3.0, 2.0, 1.0,-1.0,
+             4.0, 3.0, 6.0, 5.0,
+             1.0, 2.0, 7.0, 8.0,
+        ]);
+        let expected = Matrix::new_with_data(4, 4, vec![
+            20.0, 22.0, 50.0, 48.0,
+            44.0, 54.0,114.0,108.0,
+            40.0, 58.0,110.0,102.0,
+            16.0, 26.0, 46.0, 42.0,
+        ]);
+        assert!(&a * &b == expected);
     }
 }
