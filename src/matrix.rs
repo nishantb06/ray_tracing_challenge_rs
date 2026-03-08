@@ -1,4 +1,5 @@
 use crate::utils::{equal};
+use crate::tuple::Tuple;
 use std::ops::Mul;
 
 #[derive(Debug)]
@@ -97,6 +98,38 @@ impl Mul for &Matrix {
             rhs.columns,
             final_matrix.into_iter().flatten().collect()
         );
+    }
+}
+
+impl Mul<&Tuple> for &Matrix {
+    type Output = Tuple;
+
+    fn mul(self, rhs: &Tuple) -> Self::Output {
+        assert!(self.columns == 4, "Matrix must have 4 columns to multiply with a Tuple");
+        let tuple_col = [rhs.x, rhs.y, rhs.z, rhs.w];
+        let mut result = [0.0; 4];
+        for r in 0..self.rows {
+            for c in 0..4 {
+                result[r] += self.data[r][c] * tuple_col[c];
+            }
+        }
+        Tuple::new(result[0], result[1], result[2], result[3])
+    }
+}
+
+impl Mul<&Matrix> for &Tuple {
+    type Output = Tuple;
+
+    fn mul(self, rhs: &Matrix) -> Self::Output {
+        assert!(rhs.rows == 4, "Matrix must have 4 rows to multiply with a Tuple");
+        let tuple_row = [self.x, self.y, self.z, self.w];
+        let mut result = [0.0; 4];
+        for c in 0..rhs.columns {
+            for r in 0..4 {
+                result[c] += tuple_row[r] * rhs.data[r][c];
+            }
+        }
+        Tuple::new(result[0], result[1], result[2], result[3])
     }
 }
 
@@ -205,5 +238,33 @@ mod tests {
             16.0, 26.0, 46.0, 42.0,
         ]);
         assert!(&a * &b == expected);
+    }
+
+    use crate::tuple::Tuple;
+
+    #[test]
+    fn matrix_multiplied_by_tuple() {
+        let a = Matrix::new_with_data(4, 4, vec![
+            1.0, 2.0, 3.0, 4.0,
+            2.0, 4.0, 4.0, 2.0,
+            8.0, 6.0, 4.0, 1.0,
+            0.0, 0.0, 0.0, 1.0,
+        ]);
+        let b = Tuple::new(1.0, 2.0, 3.0, 1.0);
+        let expected = Tuple::new(18.0, 24.0, 33.0, 1.0);
+        assert!((&a * &b).is_equal(&expected));
+    }
+
+    #[test]
+    fn tuple_multiplied_by_matrix() {
+        let a = Tuple::new(1.0, 2.0, 3.0, 1.0);
+        let b = Matrix::new_with_data(4, 4, vec![
+            1.0, 2.0, 3.0, 4.0,
+            2.0, 4.0, 4.0, 2.0,
+            8.0, 6.0, 4.0, 1.0,
+            0.0, 0.0, 0.0, 1.0,
+        ]);
+        let expected = Tuple::new(29.0, 28.0, 23.0, 12.0);
+        assert!((&a * &b).is_equal(&expected));
     }
 }
