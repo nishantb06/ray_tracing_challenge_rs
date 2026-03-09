@@ -589,10 +589,325 @@ The `Ordering` parameter controls how this atomic operation interacts with **oth
 It's essentially a global auto-increment counter that starts at 1. Each `Sphere::new()` atomically grabs the next number and bumps the counter, so no two spheres ever share an ID — even if created from different threads.
 ---------------------
 ---------------------
+### Why lifetimes are needed here
+
+`Intersection` stores a **reference** (`&Sphere`) rather than owning the sphere. This is efficient — you don't clone the sphere for every intersection — but it creates a fundamental question for the Rust compiler: *how long does the Sphere behind that reference live?* The lifetime `'a` is the answer.
+
+### Walking through each piece
+
+**1. The struct definition**
+
+```5:8:src/intersection.rs
+pub struct Intersection<'a> {
+    pub t: f64,
+    pub object: &'a Sphere,
+}
+```
+
+`'a` is a **lifetime parameter** on the struct. It says: "an `Intersection<'a>` holds a reference to a `Sphere` that is guaranteed to live for at least `'a`." The struct itself cannot outlive `'a`, because if it did, `object` would be a dangling pointer.
+
+Think of `'a` as a label that represents some span of time during program execution. The compiler uses it to ensure the `Sphere` isn't dropped while an `Intersection` still points to it.
+
+**2. The constructor**
+
+```17:21:src/intersection.rs
+impl<'a> Intersection<'a> {
+    pub fn new(t: f64, object: &'a Sphere) -> Self {
+        Intersection { t, object }
+    }
+}
+```
+
+- `impl<'a>` declares the lifetime parameter for the entire impl block.
+- `object: &'a Sphere` in the function signature says: "the reference you pass in must live for `'a`."
+- The returned `Self` is `Intersection<'a>`, which inherits the same lifetime — so the returned intersection can't outlive the sphere reference you passed in.
+
+**3. Intersections wraps a Vec of them**
+
+```12:14:src/intersection.rs
+pub struct Intersections<'a> {
+    pub data: Vec<Intersection<'a>>,
+}
+```
+
+The lifetime propagates upward. An `Intersections<'a>` contains many `Intersection<'a>` values, and *all of them* borrow spheres that must live for at least `'a`. The entire collection is invalid once any referenced sphere is dropped.
+
+**4. Where `'a` gets its concrete meaning — `Sphere::intersect`**
+
+```27:27:src/sphere.rs
+    pub fn intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
+```
+
+This is where it all comes together. The signature says:
+- `&'a self` — borrow the sphere for some lifetime `'a`
+- `-> Intersections<'a>` — the returned intersections live for that same `'a`
+
+So the compiler links them: **the `Intersections` you get back can't outlive the `&self` borrow of the sphere**. Inside the body, `Intersection::new(t1, self)` passes `self` (which is `&'a Sphere`) as the object, and the types all line up.
+
+### What the compiler actually prevents
+
+Consider what would happen without lifetimes:
+
+```rust
+let xs;
+{
+    let s = Sphere::new();
+    let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+    xs = s.intersect(&r);
+}  // s is dropped here
+// xs.data[0].object would be a dangling pointer!
+println!("{}", xs.data[0].object.id);  // use-after-free
+```
+
+The lifetime `'a` on `intersect(&'a self) -> Intersections<'a>` makes the compiler reject this. It sees that `xs` (which is `Intersections<'a>`) must not outlive the borrow `&'a self`, but `s` is dropped at the closing brace while `xs` is used after — compile error.
+
+### How it works in the tests
+
+```rust
+let s = Sphere::new();                          // s lives until end of test
+let i = Intersection::new(3.5, &s);             // i borrows s — 'a = rest of test
+assert_eq!(i.object.id, s.id);                  // fine, s is still alive
+```
+
+Both `s` and `i` live until the end of the function. The compiler infers `'a` to be the overlapping region where both are alive, and everything checks out.
+
+### In short
+
+| Piece | What `'a` means |
+|-------|----------------|
+| `Intersection<'a>` | "I hold a reference to a Sphere that lives for at least `'a`" |
+| `Intersections<'a>` | "All my Intersection records borrow Spheres that live for at least `'a`" |
+| `intersect(&'a self) -> Intersections<'a>` | "The result borrows me (`self`), so it can't outlive me" |
+
+The lifetime is the compiler's proof that no `Intersection` will ever hold a dangling reference to a destroyed `Sphere`. You get the efficiency of references (no cloning) with the safety guarantee at compile time — zero runtime cost.
+---------------------
+---------------------
+Don’t let that last test trip you up! The intersections are intentionally given in random order; it’s up to your intersections() function to maintain a sorted list or, at the very least, sort the list on demand. This will be important down the road when you have more complicated scenes with multiple objects. It won’t be feasible for each shape to manually preserve the sort order of that intersec- tion list. We might need to implement a more efficient data structure to track the hits like a Binary indexed Tree or Segment tree which can keep the hits sorted 
+---------------------
+---------------------
 
 ---------------------
 ---------------------
 
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
+---------------------
+---------------------
+
+---------------------
+---------------------
+
+---------------------
+---------------------
 ---------------------
 ---------------------
 

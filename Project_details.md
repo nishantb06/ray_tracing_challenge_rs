@@ -105,3 +105,10 @@ So, if you want a single matrix that rotates, and then scales, and then translat
 
 
 TODO operator overloading is not implemented for tuple 
+
+
+When rendering your scene, you’ll need to be able to identify which one of all the intersections is actually visible from the ray’s origin. Some may be behind the ray, and others may be hidden behind (or occluded by) other objects. For the sake of discussion, we’ll call the visible intersection the hit. This is really the only intersection that matters for most things.
+
+The hit will never be behind the ray’s origin, since that’s effectively behind the camera, so you can ignore all intersections with negative t values when determining the hit. In fact, the hit will always be the intersection with the lowest nonnegative t value.
+
+Don’t let that last test trip you up! The intersections are intentionally given in random order; it’s up to your intersections() function to maintain a sorted list or, at the very least, sort the list on demand. This will be important down the road when you have more complicated scenes with multiple objects. It won’t be feasible for each shape to manually preserve the sort order of that intersec- tion list. We might need to implement a more efficient data structure to track the hits like a Binary indexed Tree or Segment tree which can keep the hits sorted 
