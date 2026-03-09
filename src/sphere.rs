@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::tuple::Tuple;
 use crate::ray::Ray;
+use crate::intersection::{Intersection, Intersections};
 
 static NEXT_SPHERE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -23,7 +24,7 @@ impl Sphere {
         }
     }
 
-    pub fn intersect(&self, ray: &Ray) -> Vec<f64> {
+    pub fn intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
         let sphere_to_ray = &ray.origin - &self.center;
 
         let a = ray.direction.dot(&ray.direction);
@@ -33,7 +34,7 @@ impl Sphere {
         let discriminant = b * b - 4.0 * a * c;
 
         if discriminant < 0.0 {
-            return vec![];
+            return Intersections::new(vec![]);
         }
 
         let sqrt_disc = discriminant.sqrt();
@@ -44,7 +45,10 @@ impl Sphere {
             std::mem::swap(&mut t1, &mut t2);
         }
 
-        vec![t1, t2]
+        Intersections::new(vec![
+            Intersection::new(t1, self),
+            Intersection::new(t2, self),
+        ])
     }
 }
 
@@ -64,9 +68,9 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let s = Sphere::new();
         let xs = s.intersect(&r);
-        assert_eq!(xs.len(), 2);
-        assert!(crate::utils::equal(xs[0], 4.0));
-        assert!(crate::utils::equal(xs[1], 6.0));
+        assert_eq!(xs.count(), 2);
+        assert!(crate::utils::equal(xs.data[0].t, 4.0));
+        assert!(crate::utils::equal(xs.data[1].t, 6.0));
     }
 
     #[test]
@@ -74,9 +78,9 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 1.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let s = Sphere::new();
         let xs = s.intersect(&r);
-        assert_eq!(xs.len(), 2);
-        assert!(crate::utils::equal(xs[0], 5.0));
-        assert!(crate::utils::equal(xs[1], 5.0));
+        assert_eq!(xs.count(), 2);
+        assert!(crate::utils::equal(xs.data[0].t, 5.0));
+        assert!(crate::utils::equal(xs.data[1].t, 5.0));
     }
 
     #[test]
@@ -84,7 +88,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 2.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let s = Sphere::new();
         let xs = s.intersect(&r);
-        assert_eq!(xs.len(), 0);
+        assert_eq!(xs.count(), 0);
     }
 
     #[test]
@@ -92,9 +96,9 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));
         let s = Sphere::new();
         let xs = s.intersect(&r);
-        assert_eq!(xs.len(), 2);
-        assert!(crate::utils::equal(xs[0], -1.0));
-        assert!(crate::utils::equal(xs[1], 1.0));
+        assert_eq!(xs.count(), 2);
+        assert!(crate::utils::equal(xs.data[0].t, -1.0));
+        assert!(crate::utils::equal(xs.data[1].t, 1.0));
     }
 
     #[test]
@@ -102,9 +106,9 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, 5.0), Tuple::vector(0.0, 0.0, 1.0));
         let s = Sphere::new();
         let xs = s.intersect(&r);
-        assert_eq!(xs.len(), 2);
-        assert!(crate::utils::equal(xs[0], -6.0));
-        assert!(crate::utils::equal(xs[1], -4.0));
+        assert_eq!(xs.count(), 2);
+        assert!(crate::utils::equal(xs.data[0].t, -6.0));
+        assert!(crate::utils::equal(xs.data[1].t, -4.0));
     }
 
     #[test]
@@ -112,7 +116,18 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let s = Sphere::new();
         let xs = s.intersect(&r);
-        assert_eq!(xs.len(), 2);
-        assert!(xs[0] <= xs[1], "expected xs[0] <= xs[1], got {} > {}", xs[0], xs[1]);
+        assert_eq!(xs.count(), 2);
+        assert!(xs.data[0].t <= xs.data[1].t,
+            "expected xs[0].t <= xs[1].t, got {} > {}", xs.data[0].t, xs.data[1].t);
+    }
+
+    #[test]
+    fn intersect_sets_the_object_on_the_intersection() {
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let s = Sphere::new();
+        let xs = s.intersect(&r);
+        assert_eq!(xs.count(), 2);
+        assert_eq!(xs.data[0].object.id, s.id);
+        assert_eq!(xs.data[1].object.id, s.id);
     }
 }
