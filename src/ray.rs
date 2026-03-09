@@ -1,7 +1,7 @@
 use crate::tuple::Tuple;
 use crate::utils::equal;
 use crate::matrix::Matrix;
-use crate::transformation::{translation, scaling};
+
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -43,6 +43,7 @@ impl Ray {
 
 #[cfg(test)]
 mod tests {
+    use crate::transformation::{translation, scaling};
     use super::*;
 
     #[test]

@@ -70,6 +70,7 @@ impl Mul for &Color {
     }
 }
 
+#[allow(dead_code)]
 impl Canvas {
     pub fn new(width: usize, height: usize) -> Self {
         Self { width, height, pixels: vec![Color::new(0.0, 0.0, 0.0); width * height] }

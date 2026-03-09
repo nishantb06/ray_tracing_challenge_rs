@@ -688,7 +688,48 @@ Don’t let that last test trip you up! The intersections are intentionally give
 in tracking hits commit , they added an Option and a corresponding unwrap, come back to it later . 
 ---------------------
 ---------------------
+so Transformation T was supposed to be done to the sphere , but we put the inverse of the that transformation to the ray instead , does that mean we bought the ray into the object space from the world space ?
+Exactly right. Here's the intuition:
 
+### World space vs Object space
+
+- **World space** is where everything lives together — rays, spheres, lights, etc., all positioned in the same coordinate system.
+- **Object space** is the sphere's "local" coordinate system. In object space, the sphere is always a unit sphere at the origin — no scaling, no translation, no rotation applied.
+
+### The equivalence
+
+Say you have a sphere scaled by 2x. You could either:
+
+1. **Transform the sphere** into world space (make it radius 2) and intersect with the original ray, or
+2. **Transform the ray** into object space (shrink it by the inverse — scale by 0.5) and intersect with the simple unit sphere at the origin.
+
+Both give the same `t` values because the relative geometry is identical. If you double the sphere, the ray hits it at certain points. If instead you halve the ray's coordinates, the relationship between the ray and the unit sphere is exactly the same.
+
+### Why do it this way?
+
+The unit sphere intersection math is simple and always the same — you already wrote it. It only knows about a sphere of radius 1 at the origin. Rather than making that math more complex to handle arbitrary transforms, you "undo" the sphere's transform on the ray, bringing it into the coordinate system where the sphere *is* just a unit sphere at the origin.
+
+That's what this line does:
+
+```rust
+let inv = self.transform.inverse_gauss_jordan();
+let local_ray = ray.transform(&inv);
+```
+
+- `self.transform` moves the sphere from object space **to** world space.
+- `self.transform.inverse()` moves from world space **back to** object space.
+- Applying that inverse to the ray brings the ray from world space into the sphere's object space.
+
+Then the intersection math runs on `local_ray` against the plain unit sphere — exactly the code you already have. The resulting `t` values are valid in world space too, because `t` is a scalar parameter along the ray's direction, and the transformation preserves the parametric relationship.
+
+### Visual example
+
+Your scaled sphere test: sphere scaled `(2, 2, 2)`, ray starts at `(0, 0, -5)`.
+
+- **Approach 1 (conceptual):** Make the sphere radius 2, intersect the original ray. Hits at `t=3` and `t=7`.
+- **Approach 2 (what the code does):** Apply `scaling(0.5, 0.5, 0.5)` to the ray, getting origin `(0, 0, -2.5)` and direction `(0, 0, 0.5)`. Intersect with unit sphere. The quadratic gives `t=3` and `t=7` — same answer.
+
+This "inverse transform the ray" trick is the standard approach in ray tracers. It keeps the intersection code clean and works for any transformation — translation, rotation, scaling, or any combination.
 ---------------------
 ---------------------
 

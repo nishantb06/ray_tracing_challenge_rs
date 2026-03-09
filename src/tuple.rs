@@ -1,7 +1,7 @@
 use std::ops::{Add,Sub,Neg,Div,Mul};
 use crate::utils::{equal};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)] // suppresses the warnings
 pub struct Tuple {
     pub x: f64,
