@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::tuple::Tuple;
 use crate::ray::Ray;
+use crate::matrix::Matrix;
 use crate::intersection::{Intersection, Intersections};
 
 static NEXT_SPHERE_ID: AtomicU64 = AtomicU64::new(1);
@@ -12,6 +13,7 @@ pub struct Sphere {
     pub id: u64,
     pub center: Tuple,
     pub radius: f64,
+    pub transform: Matrix,
 }
 
 #[allow(dead_code)]
@@ -21,14 +23,22 @@ impl Sphere {
             id: NEXT_SPHERE_ID.fetch_add(1, Ordering::Relaxed),
             center: Tuple::point(0.0, 0.0, 0.0),
             radius: 1.0,
+            transform: Matrix::identity(4),
         }
     }
 
-    pub fn intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
-        let sphere_to_ray = &ray.origin - &self.center;
+    // consuming the transformation matrix
+    pub fn set_transform(&mut self, transform: Matrix) {
+        self.transform = transform;
+    }
 
-        let a = ray.direction.dot(&ray.direction);
-        let b = 2.0 * ray.direction.dot(&sphere_to_ray);
+    pub fn intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
+        let inv = self.transform.inverse_gauss_jordan();
+        let local_ray = ray.transform(&inv);
+        let sphere_to_ray = &local_ray.origin - &self.center;
+
+        let a = local_ray.direction.dot(&local_ray.direction);
+        let b = 2.0 * local_ray.direction.dot(&sphere_to_ray);
         let c = sphere_to_ray.dot(&sphere_to_ray) - 1.0;
 
         let discriminant = b * b - 4.0 * a * c;
@@ -129,5 +139,39 @@ mod tests {
         assert_eq!(xs.count(), 2);
         assert_eq!(xs.data[0].object.id, s.id);
         assert_eq!(xs.data[1].object.id, s.id);
+    }
+
+    #[test]
+    fn a_spheres_default_transformation() {
+        let s = Sphere::new();
+        assert_eq!(s.transform, Matrix::identity(4));
+    }
+
+    #[test]
+    fn changing_a_spheres_transformation() {
+        let mut s = Sphere::new();
+        let t = crate::transformation::translation(2.0, 3.0, 4.0);
+        s.set_transform(crate::transformation::translation(2.0, 3.0, 4.0));
+        assert_eq!(s.transform, t);
+    }
+
+    #[test]
+    fn intersecting_a_scaled_sphere_with_a_ray() {
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let mut s = Sphere::new();
+        s.set_transform(crate::transformation::scaling(2.0, 2.0, 2.0));
+        let xs = s.intersect(&r);
+        assert_eq!(xs.count(), 2);
+        assert!(crate::utils::equal(xs.data[0].t, 3.0));
+        assert!(crate::utils::equal(xs.data[1].t, 7.0));
+    }
+
+    #[test]
+    fn intersecting_a_translated_sphere_with_a_ray() {
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let mut s = Sphere::new();
+        s.set_transform(crate::transformation::translation(5.0, 0.0, 0.0));
+        let xs = s.intersect(&r);
+        assert_eq!(xs.count(), 0);
     }
 }
