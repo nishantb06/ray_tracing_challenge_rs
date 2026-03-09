@@ -2,6 +2,9 @@ mod tuple;
 mod utils;
 mod matrix;
 mod transformation;
+mod canvas;
+mod ray;
+mod sphere;
 
 use matrix::Matrix;
 fn main() {

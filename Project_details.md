@@ -102,3 +102,6 @@ Write the following tests, demonstrating how a point is affected by each of thes
 
 Chaining
 So, if you want a single matrix that rotates, and then scales, and then translates, you can multiply the translation matrix by the scaling matrix, and then by the rotation matrix. That is to say, you must concatenate the transformations in reverse order to have them applied in the order you want! Add the following tests to demonstrate this (particularly counterintuitive) result.
+
+
+TODO operator overloading is not implemented for tuple 

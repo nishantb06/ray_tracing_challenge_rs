@@ -515,10 +515,78 @@ Rust also has:
 - `saturating_*` — clamps at bounds (what we used)
 ---------------------
 ---------------------
+All 6 tests pass. Here's a summary of the changes:
 
+**Unique ID** — each `Sphere::new()` call gets a unique `id` via a global atomic counter:
+
+```1:6:src/sphere.rs
+use std::sync::atomic::{AtomicU64, Ordering};
+// ...
+static NEXT_SPHERE_ID: AtomicU64 = AtomicU64::new(1);
+```
+
+```20:26:src/sphere.rs
+    pub fn new() -> Self {
+        Sphere {
+            id: NEXT_SPHERE_ID.fetch_add(1, Ordering::Relaxed),
+            center: Tuple::point(0.0, 0.0, 0.0),
+            radius: 1.0,
+        }
+    }
+```
+
+**5 new tests added:**
+
+| Test | Ray origin | Behavior | Expected t values |
+|------|-----------|----------|-------------------|
+| `a_sphere_has_unique_id` | — | Two spheres get different IDs | `s1.id != s2.id` |
+| `a_ray_intersects_a_sphere_at_a_tangent` | `(0, 1, -5)` | Grazes the top edge | `5.0, 5.0` |
+| `a_ray_misses_a_sphere` | `(0, 2, -5)` | Passes above entirely | empty (count = 0) |
+| `a_ray_originates_inside_a_sphere` | `(0, 0, 0)` | Starts at center | `-1.0, 1.0` |
+| `a_sphere_is_behind_a_ray` | `(0, 0, 5)` | Sphere is behind the ray | `-6.0, -4.0` |
+
+The tangent case returns two identical `t` values (discriminant = 0), and rays originating inside or past the sphere correctly produce negative `t` values — the intersection math doesn't clip to positive `t`, which will be useful later for CSG operations.
 ---------------------
 ---------------------
+std::mem::swap(&mut t1, &mut t2); what is this 
+use std::sync::atomic::{AtomicU64, Ordering}; look more into this as well
 
+Here's what's going on:
+
+### `AtomicU64`
+
+`AtomicU64` is a thread-safe integer. A normal `static mut u64` counter would require `unsafe` code and wouldn't be safe across threads. `AtomicU64` lets you read and modify the value from any thread without a mutex — the CPU guarantees the operation is indivisible (atomic), so no two threads can see a half-updated value.
+
+### `fetch_add(1, Ordering::Relaxed)`
+
+This does two things in one atomic step:
+1. **Returns** the current value of the counter.
+2. **Increments** the counter by 1.
+
+So the sequence of `Sphere::new()` calls produces:
+
+| Call # | `fetch_add` returns | Counter becomes |
+|--------|-------------------|-----------------|
+| 1st    | **1**             | 2               |
+| 2nd    | **2**             | 3               |
+| 3rd    | **3**             | 4               |
+| ...    | ...               | ...             |
+
+The first sphere gets `id = 1`, the second gets `id = 2`, and so on. Every sphere is guaranteed a unique ID.
+
+### `Ordering::Relaxed`
+
+The `Ordering` parameter controls how this atomic operation interacts with **other** memory operations (reads/writes to other variables) across threads. There are several levels:
+
+- **`Relaxed`** — the weakest. It only guarantees that the `fetch_add` itself is atomic (no torn reads/writes). It makes **no** guarantees about the ordering of other memory operations relative to this one.
+- **`Acquire` / `Release`** — creates a happens-before relationship. Useful when the atomic guards access to shared data (like a lock).
+- **`SeqCst`** — the strongest. All threads see all `SeqCst` operations in the same global order.
+
+`Relaxed` is the right choice here because the sphere ID counter is self-contained — we don't use it to synchronize access to any other shared data. We only need the increment itself to be atomic (i.e., no two calls return the same value), and `Relaxed` guarantees that. Using a stronger ordering would add unnecessary overhead for no benefit.
+
+### In summary
+
+It's essentially a global auto-increment counter that starts at 1. Each `Sphere::new()` atomically grabs the next number and bumps the counter, so no two spheres ever share an ID — even if created from different threads.
 ---------------------
 ---------------------
 

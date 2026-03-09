@@ -26,9 +26,9 @@ impl Tuple {
 
     pub fn is_equal(&self, other: &Self) -> bool {
         return equal(self.x, other.x) 
-            && equal(self.x, other.x)
-            && equal(self.x, other.x)
-            && equal(self.x, other.x)
+            && equal(self.y, other.y)
+            && equal(self.z, other.z)
+            && equal(self.w, other.w)
     }
 
     pub fn magnitude(&self) -> f64 {
