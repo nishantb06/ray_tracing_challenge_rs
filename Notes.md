@@ -685,7 +685,7 @@ The lifetime is the compiler's proof that no `Intersection` will ever hold a dan
 Don’t let that last test trip you up! The intersections are intentionally given in random order; it’s up to your intersections() function to maintain a sorted list or, at the very least, sort the list on demand. This will be important down the road when you have more complicated scenes with multiple objects. It won’t be feasible for each shape to manually preserve the sort order of that intersec- tion list. We might need to implement a more efficient data structure to track the hits like a Binary indexed Tree or Segment tree which can keep the hits sorted 
 ---------------------
 ---------------------
-
+in tracking hits commit , they added an Option and a corresponding unwrap, come back to it later . 
 ---------------------
 ---------------------
 

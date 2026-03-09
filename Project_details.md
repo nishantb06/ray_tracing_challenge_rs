@@ -112,3 +112,11 @@ When rendering your scene, you’ll need to be able to identify which one of all
 The hit will never be behind the ray’s origin, since that’s effectively behind the camera, so you can ignore all intersections with negative t values when determining the hit. In fact, the hit will always be the intersection with the lowest nonnegative t value.
 
 Don’t let that last test trip you up! The intersections are intentionally given in random order; it’s up to your intersections() function to maintain a sorted list or, at the very least, sort the list on demand. This will be important down the road when you have more complicated scenes with multiple objects. It won’t be feasible for each shape to manually preserve the sort order of that intersec- tion list. We might need to implement a more efficient data structure to track the hits like a Binary indexed Tree or Segment tree which can keep the hits sorted 
+
+In other words: whatever transformation you want to apply to the sphere, apply the inverse of that transformation to the ray, instead. Crazy, right? But it works!
+
+Another way to think about transformation matrices is to think of them as converting points between two different coordinate systems. At the scene level, everything is in world space coordinates, relative to the overall world. But at the object level, everything is in object space coordinates, relative to the object itself.
+Multiplying a point in object space by a transformation matrix converts that point to world space—scaling it, translating, rotating it, or whatever. Multiplying a point in world space by the inverse of the transformation matrix converts that point back to object space.
+Want to intersect a ray in world space with a sphere in object space? Just convert the ray’s origin and direction to that same object space, and you’re golden.
+
+Notice how, in the second test, the ray’s direction vector is left unnormalized. This is intentional, and important! Transforming a ray has the effect of (potentially) stretching or shrinking its direction vector. You have to leave that vector with its new length, so that when the t value is eventually comput- ed, it represents an intersection at the correct distance (in world space!) from the ray’s origin.
