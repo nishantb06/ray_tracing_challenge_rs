@@ -473,7 +473,46 @@ If you do cache:
 - Use `Cell`/`RefCell` if you need to keep compatibility with older Rust or want owned `Tuple` from `normalize()`.
 ---------------------
 ---------------------
+They're Rust methods on integer types that prevent overflow/underflow by clamping at the type's bounds.
 
+### `saturating_add`
+
+Adds two numbers, but if the result would overflow, it returns the maximum value instead of panicking or wrapping.
+
+```rust
+let x: usize = usize::MAX;
+x.saturating_add(1) // returns usize::MAX, not panic/wrap
+```
+
+### `saturating_sub`
+
+Subtracts, but if the result would go below zero (for unsigned types like `usize`), it returns `0` instead of panicking.
+
+```rust
+let x: usize = 0;
+x.saturating_sub(1) // returns 0, not panic
+
+let y: usize = 5;
+y.saturating_sub(3) // returns 2 (normal subtraction)
+```
+
+### Why I used them in the clock program
+
+In this line:
+
+```32:33:src/main.rs
+                let x = px.saturating_add(dx).saturating_sub(1).min(size - 1);
+                let y = py.saturating_add(dy).saturating_sub(1).min(size - 1);
+```
+
+We're drawing a 3x3 block of pixels around each hour marker. `dx` and `dy` go from 0 to 2, and we subtract 1 to center the block (offsets become -1, 0, +1). Since `px` and `py` are `usize` (unsigned), subtracting 1 when the value is 0 would underflow and panic. `saturating_sub` prevents that by clamping to 0. Similarly, `.min(size - 1)` clamps the upper bound so we don't write outside the canvas.
+
+### Alternatives
+
+Rust also has:
+- `wrapping_add` / `wrapping_sub` — wraps around (like C unsigned arithmetic)
+- `checked_add` / `checked_sub` — returns `Option<T>`, `None` on overflow
+- `saturating_*` — clamps at bounds (what we used)
 ---------------------
 ---------------------
 
