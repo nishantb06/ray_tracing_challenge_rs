@@ -80,6 +80,64 @@ impl Matrix {
             }
         }
     }
+
+    pub fn augment_to_side(&self, other: &Self) -> Self {
+        assert_eq!(self.rows, other.rows, "Row count must match to augment");
+        let mut aug = Matrix::new(self.rows, self.columns + other.columns);
+        for i in 0..self.rows {
+            for j in 0..self.columns {
+                aug.data[i][j] = self.data[i][j];
+            }
+        }
+        for i in 0..other.rows {
+            for j in 0..other.columns {
+                aug.data[i][self.columns + j] = other.data[i][j];
+            }
+        }
+        aug
+    }
+
+    pub fn inverse_gauss_jordan(&self) -> Self {
+        assert_eq!(self.rows, self.columns, "Only square matrices can be inverted");
+        let n = self.rows;
+        let mut aug = self.augment_to_side(&Matrix::identity(n));
+    
+        // Interchange rows so larger pivot values come first
+        for i in (1..n).rev() {
+            if aug.data[i - 1][0] < aug.data[i][0] {
+                aug.data.swap(i - 1, i);
+            }
+        }
+    
+        // Eliminate to get identity on the left side
+        for i in 0..n {
+            for j in 0..n {
+                if j != i {
+                    let multiplier = aug.data[j][i] / aug.data[i][i];
+                    for k in 0..aug.columns {
+                        aug.data[j][k] -= aug.data[i][k] * multiplier;
+                    }
+                }
+            }
+        }
+    
+        // Scale each row so diagonal becomes 1
+        for i in 0..n {
+            let temp = aug.data[i][i];
+            for j in 0..aug.columns {
+                aug.data[i][j] /= temp;
+            }
+        }
+    
+        // Extract the right half (the inverse)
+        let mut result = Matrix::new(n, n);
+        for i in 0..n {
+            for j in 0..n {
+                result.data[i][j] = aug.data[i][n + j];
+            }
+        }
+        result
+    }
 }
 
 impl PartialEq for Matrix {
@@ -279,8 +337,6 @@ mod tests {
         assert!(&a * &b == expected);
     }
 
-    use crate::tuple::Tuple;
-
     #[test]
     fn matrix_multiplied_by_tuple() {
         let a = Matrix::new_with_data(4, 4, vec![
@@ -351,4 +407,80 @@ mod tests {
             0.0, 0.0, 5.0, 8.0,
         ]));
     }
+
+    #[test]
+    fn augmenting_matrix_with_identity() {
+        let a = Matrix::new_with_data(3, 3, vec![
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
+            7.0, 8.0, 9.0,
+        ]);
+        let identity = Matrix::identity(3);
+        let aug = a.augment_to_side(&identity);
+        let expected = Matrix::new_with_data(3, 6, vec![
+            1.0, 2.0, 3.0, 1.0, 0.0, 0.0,
+            4.0, 5.0, 6.0, 0.0, 1.0, 0.0,
+            7.0, 8.0, 9.0, 0.0, 0.0, 1.0,
+        ]);
+        assert!(aug == expected);
+        // original matrix is still valid
+        assert!(a == Matrix::new_with_data(3, 3, vec![
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
+            7.0, 8.0, 9.0,
+        ]));
+    }
+
+    #[test]
+    fn calculating_inverse_of_matrix_1() {
+        let a = Matrix::new_with_data(4, 4, vec![
+             8.0, -5.0,  9.0,  2.0,
+             7.0,  5.0,  6.0,  1.0,
+            -6.0,  0.0,  9.0,  6.0,
+            -3.0,  0.0, -9.0, -4.0,
+        ]);
+        let expected = Matrix::new_with_data(4, 4, vec![
+            -0.15385, -0.15385, -0.28205, -0.53846,
+            -0.07692,  0.12308,  0.02564,  0.03077,
+             0.35897,  0.35897,  0.43590,  0.92308,
+            -0.69231, -0.69231, -0.76923, -1.92308,
+        ]);
+        assert!(a.inverse_gauss_jordan() == expected);
+    }
+    
+    #[test]
+    fn calculating_inverse_of_matrix_2() {
+        let a = Matrix::new_with_data(4, 4, vec![
+             9.0,  3.0,  0.0,  9.0,
+            -5.0, -2.0, -6.0, -3.0,
+            -4.0,  9.0,  6.0,  4.0,
+            -7.0,  6.0,  6.0,  2.0,
+        ]);
+        let expected = Matrix::new_with_data(4, 4, vec![
+            -0.04074, -0.07778,  0.14444, -0.22222,
+            -0.07778,  0.03333,  0.36667, -0.33333,
+            -0.02901, -0.14630, -0.10926,  0.12963,
+             0.17778,  0.06667, -0.26667,  0.33333,
+        ]);
+        assert!(a.inverse_gauss_jordan() == expected);
+    }
+
+    #[test]
+fn multiplying_product_by_its_inverse() {
+    let a = Matrix::new_with_data(4, 4, vec![
+         3.0, -9.0,  7.0,  3.0,
+         3.0, -8.0,  2.0, -9.0,
+        -4.0,  4.0,  4.0,  1.0,
+        -6.0,  5.0, -1.0,  1.0,
+    ]);
+    let b = Matrix::new_with_data(4, 4, vec![
+        8.0,  2.0, 2.0, 2.0,
+        3.0, -1.0, 7.0, 0.0,
+        7.0,  0.0, 5.0, 4.0,
+        6.0, -2.0, 0.0, 5.0,
+    ]);
+    let c = &a * &b;
+    let b_inv = b.inverse_gauss_jordan();
+    assert!(&c * &b_inv == a);
+}
 }
