@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::tuple::Tuple;
 use crate::ray::Ray;
 use crate::matrix::Matrix;
+use crate::material::Material;
 use crate::intersection::{Intersection, Intersections};
 
 static NEXT_SPHERE_ID: AtomicU64 = AtomicU64::new(1);
@@ -14,6 +15,7 @@ pub struct Sphere {
     pub center: Tuple,
     pub radius: f64,
     pub transform: Matrix,
+    pub material: Material,
 }
 
 #[allow(dead_code)]
@@ -24,6 +26,7 @@ impl Sphere {
             center: Tuple::point(0.0, 0.0, 0.0),
             radius: 1.0,
             transform: Matrix::identity(4),
+            material: Material::new(),
         }
     }
 
@@ -237,5 +240,25 @@ mod tests {
         s.set_transform(m);
         let n = s.normal_at(&Tuple::point(0.0, std::f64::consts::FRAC_1_SQRT_2, -std::f64::consts::FRAC_1_SQRT_2));
         assert!(n.is_equal(&Tuple::vector(0.0, 0.97014, -0.24254)));
+    }
+
+    #[test]
+    fn a_sphere_has_a_default_material() {
+        let s = Sphere::new();
+        let m = Material::new();
+        assert!(s.material.color.is_equal(&m.color));
+        assert!(crate::utils::equal(s.material.ambient, m.ambient));
+        assert!(crate::utils::equal(s.material.diffuse, m.diffuse));
+        assert!(crate::utils::equal(s.material.specular, m.specular));
+        assert!(crate::utils::equal(s.material.shininess, m.shininess));
+    }
+
+    #[test]
+    fn a_sphere_may_be_assigned_a_material() {
+        let mut s = Sphere::new();
+        let mut m = Material::new();
+        m.ambient = 1.0;
+        s.material = m;
+        assert!(crate::utils::equal(s.material.ambient, 1.0));
     }
 }

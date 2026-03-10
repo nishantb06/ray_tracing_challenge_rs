@@ -6,3 +6,5 @@ pub mod canvas;
 pub mod ray;
 pub mod intersection;
 pub mod sphere;
+pub mod light;
+pub mod material;
