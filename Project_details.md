@@ -120,3 +120,30 @@ Multiplying a point in object space by a transformation matrix converts that poi
 Want to intersect a ray in world space with a sphere in object space? Just convert the ray’s origin and direction to that same object space, and you’re golden.
 
 Notice how, in the second test, the ray’s direction vector is left unnormalized. This is intentional, and important! Transforming a ray has the effect of (potentially) stretching or shrinking its direction vector. You have to leave that vector with its new length, so that when the t value is eventually comput- ed, it represents an intersection at the correct distance (in world space!) from the ray’s origin.
+
+Chapter 6
+The truth is that most ray tracers favor approximations over physically accurate simulations, so that to shade any point, you only need to know four vectors.
+If P is where your ray intersects an object, these four vectors are defined as:
+• E is the eye vector, pointing from P to the origin of the ray (usually, where
+the eye exists that is looking at the scene).
+• L is the light vector, pointing from P to the position of the light source.
+• N is the surface normal, a vector that is perpendicular to the surface at P.
+• R is the reflection vector, pointing in the direction that incoming light would bounce, or reflect.
+
+ first you have to convert the point from world space to object space by multiplying the point by the inverse of the transformation matrix, thus:
+
+ object_point ← inverse(transform) * world_point
+
+ With that point now in object space, you can compute the normal as before, because in object space, the sphere’s origin is at the world’s origin. However! The normal vector you get will also be in object space...and to draw anything useful with it you’re going to need to convert it back to world space somehow.
+
+ So how do you go about keeping the normals perpendicular to their surface? The answer is to multiply the normal by the inverse transpose matrix instead. So you take your transformation matrix, invert it, and then transpose the result. This is what you need to multiply the normal by.
+world_normal ← transpose(inverse(transform)) * object_normal
+
+ Technically, you should be finding submatrix(transform, 3, 3) (from Spotting Submatrices, on page 34) first, and multiplying by the inverse and transpose of that. Otherwise, if your transform includes any kind of translation, then multiplying by its transpose will wind up mucking with the w coordinate in your vector, which will wreak all kinds of havoc in later computations. But if you don’t mind a bit of a hack, you can avoid all that by just setting world_normal.w to 0 after multiplying by the 4x4 inverse transpose matrix.
+
+ The inverse transpose matrix may change the length of your vector, so if you feed it a vector of length 1 (a normalized vector), you may not get a normalized vector out! It’s best to be safe, and always normalize the result.
+
+ It simulates the interaction between three different types of lighting:
+• Ambient reflection is background lighting, or light reflected from other objects in the environment. The Phong model treats this as a constant, coloring all points on the surface equally.
+• Diffuse reflection is light reflected from a matte surface. It depends only on the angle between the light source and the surface normal.
+• Specular reflection is the reflection of the light source itself and results in what is called a specular highlight—the bright spot on a curved surface. It depends only on the angle between the reflection vector and the eye vector and is controlled by a parameter that we’ll call shininess. The higher the shininess, the smaller and tighter the specular highlight.

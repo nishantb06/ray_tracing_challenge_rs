@@ -61,6 +61,10 @@ impl Tuple {
             w: 0.0,
         }
     }
+
+    pub fn reflect(&self, normal: &Self) -> Self {
+        self - &(normal * (2.0 * self.dot(normal)))
+    }
 }
 
 impl Add for &Tuple {
@@ -295,5 +299,21 @@ mod tests {
         let expected = Tuple::vector(-1.0, 2.0, -1.0);
         assert!((&a.cross(&b)).is_equal(&expected));
         assert!((&b.cross(&a)).is_equal(&(-&expected)));
+    }
+
+    #[test]
+    fn reflecting_a_vector_approaching_at_45_degrees() {
+        let v = Tuple::vector(1.0, -1.0, 0.0);
+        let n = Tuple::vector(0.0, 1.0, 0.0);
+        let r = v.reflect(&n);
+        assert!(r.is_equal(&Tuple::vector(1.0, 1.0, 0.0)));
+    }
+
+    #[test]
+    fn reflecting_a_vector_off_a_slanted_surface() {
+        let v = Tuple::vector(0.0, -1.0, 0.0);
+        let n = Tuple::vector(std::f64::consts::FRAC_1_SQRT_2, std::f64::consts::FRAC_1_SQRT_2, 0.0);
+        let r = v.reflect(&n);
+        assert!(r.is_equal(&Tuple::vector(1.0, 0.0, 0.0)));
     }
 }
