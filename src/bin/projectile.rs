@@ -1,10 +1,6 @@
-mod canvas;
-mod tuple;
-mod utils;
-
-use canvas::{Canvas, Color};
+use ray_tracing_challenge_rs::canvas::{Canvas, Color};
+use ray_tracing_challenge_rs::tuple::Tuple;
 use std::fs;
-use tuple::Tuple;
 
 struct Projectile {
     position: Tuple,
@@ -24,7 +20,6 @@ fn tick(env: &Environment, proj: &Projectile) -> Projectile {
 }
 
 fn main() {
-    // Projectile: starts one unit above origin, velocity normalized then scaled by 11.25
     let velocity = &Tuple::vector(1.0, 1.0, 0.0).normalize() * 11.25;
     let projectile = Projectile {
         position: Tuple::point(0.0, 1.0, 0.0),
@@ -36,7 +31,6 @@ fn main() {
         wind: Tuple::vector(-0.01, 0.0, 0.0),
     };
 
-    // First pass: run simulation and collect positions
     let mut positions = vec![];
     let mut proj = projectile;
     while proj.position.y > 0.0 {
@@ -44,7 +38,6 @@ fn main() {
         proj = tick(&environment, &proj);
     }
 
-    // Compute world bounds with padding
     let min_x = positions.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
     let max_x = positions.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
     let min_y = positions.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
@@ -60,7 +53,6 @@ fn main() {
     let mut canvas = Canvas::new(canvas_width, canvas_height);
     let red = Color::new(1.0, 0.0, 0.0);
 
-    // World y increases up; canvas y=0 is top. So: canvas_y = height - 1 - world_y_mapped
     for (wx, wy) in positions {
         let cx = ((wx - min_x + padding) / world_width * (canvas_width as f64)).round() as usize;
         let cy = ((max_y - wy + padding) / world_height * (canvas_height as f64)).round() as usize;

@@ -732,7 +732,43 @@ Your scaled sphere test: sphere scaled `(2, 2, 2)`, ray starts at `(0, 0, -5)`.
 This "inverse transform the ray" trick is the standard approach in ray tracers. It keeps the intersection code clean and works for any transformation — translation, rotation, scaling, or any combination.
 ---------------------
 ---------------------
+Everything works. Here's what was done:
 
+### The core problem
+
+Files in `src/bin/` are **separate crate roots** — they can't use `mod tuple;` because Rust looks for `src/bin/tuple.rs`, which doesn't exist. Your modules live in `src/`.
+
+### The fix: library crate
+
+Created **`src/lib.rs`** that exposes all modules publicly:
+
+```1:8:src/lib.rs
+pub mod tuple;
+pub mod utils;
+pub mod matrix;
+pub mod transformation;
+pub mod canvas;
+pub mod ray;
+pub mod intersection;
+pub mod sphere;
+```
+
+Now your project has both a **library** (`src/lib.rs`) and **binaries** (`src/main.rs`, `src/bin/*.rs`). The library owns the modules, and all binaries import from it using the crate name:
+
+```rust
+use ray_tracing_challenge_rs::tuple::Tuple;
+use ray_tracing_challenge_rs::canvas::{Canvas, Color};
+// etc.
+```
+
+Updated all three binaries (`red_circle.rs`, `clock.rs`, `projectile.rs`) and `main.rs` to use this pattern. You can now run any binary with:
+
+```bash
+cargo run --bin red_circle
+cargo run --bin clock
+cargo run --bin projectile
+cargo run              # runs src/main.rs
+```
 ---------------------
 ---------------------
 

@@ -1,14 +1,6 @@
-mod tuple;
-mod utils;
-mod matrix;
-mod transformation;
-mod canvas;
-mod ray;
-mod intersection;
-mod sphere;
+use ray_tracing_challenge_rs::matrix::Matrix;
 
-use matrix::Matrix;
 fn main() {
-    let m: Matrix = Matrix::new_with_data(2,2, vec![1.0,2.0,3.0,4.0]);
+    let m: Matrix = Matrix::new_with_data(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
     println!("{:?}", m);
 }

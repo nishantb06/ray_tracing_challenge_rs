@@ -1,12 +1,6 @@
-mod tuple;
-mod utils;
-mod matrix;
-mod canvas;
-mod transformation;
-
-use canvas::{Canvas, Color};
-use tuple::Tuple;
-use transformation::rotation_y;
+use ray_tracing_challenge_rs::canvas::{Canvas, Color};
+use ray_tracing_challenge_rs::tuple::Tuple;
+use ray_tracing_challenge_rs::transformation::rotation_y;
 use std::f64::consts::PI;
 
 fn main() {
