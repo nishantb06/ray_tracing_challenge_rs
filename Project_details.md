@@ -161,3 +161,13 @@ View transformation
 - pretends the eye moves instead of the world
 - the view transformation is actually moving the world with respect to the eye
 - Note that the up vector doesn’t need to be normalized. In fact, it doesn’t even need to be exactly perpendicular to the viewing direction. As you’ll see shortly, the view_transform() function will tidy that up vector, so you only have to point vaguely in the direction you want. Isn’t that convenient?
+
+The camera is defined by the following four attributes:
+• hsize is the horizontal size (in pixels) of the canvas that the picture will be rendered to.
+• vsize is the canvas’s vertical size (in pixels).
+• field_of_view is an angle that describes how much the camera can see. When the field of view is small, the view will be “zoomed in,” magnifying a smaller area of the scene.
+• transform is a matrix describing how the world should be oriented relative to the camera. This is usually a view transformation like you implemented in the previous section.
+
+One of the primary responsibilities of the camera is to map the three-dimen- sional scene onto a two-dimensional canvas. To do this, you’ll make the camera do just what you’ve done in previous exercises and place the canvas somewhere in the scene so that rays can be projected through it. But contrary to what you’ve done before, the camera’s canvas will always be exactly one unit in front of the camera. As you’ll see shortly, this makes the math a bit cleaner.
+
+You’ll use the pixel_size and those half_width and half_height values you computed to create rays that can pass through any given pixel on the canvas. Implement the following three tests to ensure this works. These introduce a new function, ray_for_pixel(camera, x, y), which returns a new ray that starts at the camera and passes through the indicated (x, y) pixel on the canvas. The first two tests use an untransformed camera to cast rays through the center and corner of the canvas, and the third tries a ray with a camera that has been translated and rotated.
