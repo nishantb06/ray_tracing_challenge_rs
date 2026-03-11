@@ -3,7 +3,7 @@ use crate::light::PointLight;
 use crate::tuple::Tuple;
 use crate::canvas::Color;
 use crate::transformation::scaling;
-use crate::intersection::{Intersection, Intersections, Computations};
+use crate::intersection::{Intersection, Intersections, Computations, prepare_computations};
 use crate::ray::Ray;
 use crate::material::lighting;
 
@@ -82,6 +82,27 @@ pub fn shade_hit(world: &World, comps: &Computations) -> Color {
     })
 }
 
+// It will intersect the world with the given ray and then return the color at the resulting intersection.
+pub fn color_at(world: &World, ray: &Ray) -> Color {
+    // find all the points where the ray would intersect the world
+    let xs: Intersections = world.intersect_world(ray);
+
+    // out of all the intersections find "the hit" intersection with the lowest positive t
+    let hit = xs.hit();
+    let comps;
+    if hit.is_none() {
+        return Color::new(0.0,0.0,0.0);
+    } else {
+        // at that specific intersection, calculate the necessary data to get the color
+        comps = prepare_computations(
+            &hit.unwrap(),
+            ray,
+        );
+        // return the result of the function which calculates the color with the help of the precomputed data in the above step
+        return shade_hit(world,&comps);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +175,32 @@ mod tests {
         let comps = crate::intersection::prepare_computations(&i, &r);
         let c = shade_hit(&w, &comps);
         assert!(c.is_equal(&Color::new(0.90498, 0.90498, 0.90498)));
+    }
+
+    #[test]
+    fn the_color_when_a_ray_misses() {
+        let w = World::default_world();
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 1.0, 0.0));
+        let c = color_at(&w, &r);
+        assert!(c.is_equal(&Color::new(0.0, 0.0, 0.0)));
+    }
+    
+    #[test]
+    fn the_color_when_a_ray_hits() {
+        let w = World::default_world();
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let c = color_at(&w, &r);
+        assert!(c.is_equal(&Color::new(0.38066, 0.47583, 0.2855)));
+    }
+    
+    #[test]
+    fn the_color_with_an_intersection_behind_the_ray() {
+        let mut w = World::default_world();
+        w.objects[0].material.ambient = 1.0;
+        w.objects[1].material.ambient = 1.0;
+        let inner_color = w.objects[1].material.color.clone();
+        let r = Ray::new(Tuple::point(0.0, 0.0, 0.75), Tuple::vector(0.0, 0.0, -1.0));
+        let c = color_at(&w, &r);
+        assert!(c.is_equal(&inner_color));
     }
 }
