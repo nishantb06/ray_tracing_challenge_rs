@@ -1,7 +1,7 @@
 use crate::matrix::Matrix;
 use crate::tuple::Tuple;
 use crate::ray::Ray;
-use crate::canvas::{Canvas, Color};
+use crate::canvas::Canvas;
 use crate::world::{World, color_at};
 
 #[derive(Debug)]
