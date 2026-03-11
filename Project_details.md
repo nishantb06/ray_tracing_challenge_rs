@@ -147,3 +147,7 @@ world_normal ← transpose(inverse(transform)) * object_normal
 • Ambient reflection is background lighting, or light reflected from other objects in the environment. The Phong model treats this as a constant, coloring all points on the surface equally.
 • Diffuse reflection is light reflected from a matte surface. It depends only on the angle between the light source and the surface normal.
 • Specular reflection is the reflection of the light source itself and results in what is called a specular highlight—the bright spot on a curved surface. It depends only on the angle between the reflection vector and the eye vector and is controlled by a parameter that we’ll call shininess. The higher the shininess, the smaller and tighter the specular highlight.
+
+prepare_computations() precomputes the point (in world space) where the intersection occurred, the eye vector (pointing back toward the eye, or camera), and the normal vector.new data structure encapsulating some precomputed information relating to the intersection.
+
+the eye vector (pointing back toward the eye, or camera)

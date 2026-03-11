@@ -8,3 +8,4 @@ pub mod intersection;
 pub mod sphere;
 pub mod light;
 pub mod material;
+pub mod world;
