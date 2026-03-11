@@ -1,4 +1,6 @@
 use crate::sphere::Sphere;
+use crate::tuple::Tuple;
+use crate::ray::Ray;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -17,6 +19,36 @@ pub struct Intersections<'a> {
 impl<'a> Intersection<'a> {
     pub fn new(t: f64, object: &'a Sphere) -> Self {
         Intersection { t, object }
+    }
+}
+
+pub struct Computations<'a> {
+    pub t: f64,
+    pub object: &'a Sphere,
+    pub point: Tuple,
+    pub eye_vector: Tuple,
+    pub normal_vector: Tuple,
+    pub inside: bool,
+}
+
+// precomputes the point (in world space) where the intersection occurred,
+// the eye vector (pointing back toward the eye, or camera), and the normal vector.
+pub fn prepare_computations<'a>(intersection: &'a Intersection<'a>, ray: &Ray) -> Computations<'a> {
+    let point = ray.position(intersection.t.clone());
+    let mut normal_v = intersection.object.normal_at(&point);
+    let eye_v = -&(ray.direction);
+    let mut inside = false;
+    if normal_v.dot(&eye_v) < 0.0 {
+        inside = true;
+        normal_v = -&normal_v;
+    }
+    Computations {
+        t: intersection.t.clone(),
+        object: intersection.object,
+        point: point,
+        eye_vector: eye_v,
+        normal_vector: normal_v,
+        inside,
     }
 }
 
@@ -99,5 +131,39 @@ mod tests {
         let xs = Intersections::new(vec![i1, i2, i3, i4]);
         let i = xs.hit().unwrap();
         assert!(crate::utils::equal(i.t, 2.0));
+    }
+
+    #[test]
+    fn precomputing_the_state_of_an_intersection() {
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let shape = Sphere::new();
+        let i = Intersection::new(4.0, &shape);
+        let comps = prepare_computations(&i, &r);
+        assert!(crate::utils::equal(comps.t, i.t));
+        assert_eq!(comps.object.id, i.object.id);
+        assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, -1.0)));
+        assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
+        assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
+    }
+    
+    #[test]
+    fn the_hit_when_intersection_occurs_on_the_outside() {
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let shape = Sphere::new();
+        let i = Intersection::new(4.0, &shape);
+        let comps = prepare_computations(&i, &r);
+        assert!(!comps.inside);
+    }
+    
+    #[test]
+    fn the_hit_when_intersection_occurs_on_the_inside() {
+        let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));
+        let shape = Sphere::new();
+        let i = Intersection::new(1.0, &shape);
+        let comps = prepare_computations(&i, &r);
+        assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, 1.0)));
+        assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
+        assert!(comps.inside);
+        assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
     }
 }
