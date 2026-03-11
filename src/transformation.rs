@@ -1,4 +1,5 @@
 use crate::matrix::Matrix;
+use crate::tuple::Tuple;
 
 #[allow(dead_code)]
 pub fn translation(x: f64, y: f64, z: f64) -> Matrix {
@@ -58,6 +59,25 @@ pub fn shearing(xy: f64, xz: f64, yx: f64, yz: f64, zx: f64, zy: f64) -> Matrix 
     m.data[2][0] = zx;
     m.data[2][1] = zy;
     m
+}
+
+// specify where you want the eye to be in the scene (the from parameter), 
+// the point in the scene at which you want to look (the to parameter), 
+// and a vector indicating which direction is up. 
+// The function then returns to you the corresponding transformation matrix
+#[allow(dead_code)]
+pub fn view_transform(from: &Tuple, to: &Tuple, up: &Tuple) -> Matrix {
+    let forward = (to - from).normalize();
+    let upn = up.normalize();
+    let left = forward.cross(&upn);
+    let true_up = left.cross(&forward);
+    let orientation = Matrix::new_with_data(4, 4, vec![
+         left.x,     left.y,     left.z,    0.0,
+         true_up.x,  true_up.y,  true_up.z, 0.0,
+        -forward.x, -forward.y, -forward.z, 0.0,
+         0.0,        0.0,        0.0,        1.0,
+    ]);
+    &orientation * &translation(-from.x, -from.y, -from.z)
 }
 
 #[cfg(test)]
@@ -225,5 +245,47 @@ mod tests {
     
         let t = &(&c * &b) * &a;
         assert!((&t * &p).is_equal(&Tuple::point(15.0, 0.0, 7.0)));
+    }
+
+    #[test]
+    fn view_transform_default_orientation() {
+        let from = Tuple::point(0.0, 0.0, 0.0);
+        let to   = Tuple::point(0.0, 0.0, -1.0);
+        let up   = Tuple::vector(0.0, 1.0, 0.0);
+        let t = view_transform(&from, &to, &up);
+        assert_eq!(t, Matrix::identity(4));
+    }
+
+    #[test]
+    fn view_transform_looking_in_positive_z() {
+        let from = Tuple::point(0.0, 0.0, 0.0);
+        let to   = Tuple::point(0.0, 0.0, 1.0);
+        let up   = Tuple::vector(0.0, 1.0, 0.0);
+        let t = view_transform(&from, &to, &up);
+        assert_eq!(t, scaling(-1.0, 1.0, -1.0));
+    }
+
+    #[test]
+    fn view_transform_moves_the_world() {
+        let from = Tuple::point(0.0, 0.0, 8.0);
+        let to   = Tuple::point(0.0, 0.0, 0.0);
+        let up   = Tuple::vector(0.0, 1.0, 0.0);
+        let t = view_transform(&from, &to, &up);
+        assert_eq!(t, translation(0.0, 0.0, -8.0));
+    }
+
+    #[test]
+    fn view_transform_arbitrary() {
+        let from = Tuple::point(1.0, 3.0, 2.0);
+        let to   = Tuple::point(4.0, -2.0, 8.0);
+        let up   = Tuple::vector(1.0, 1.0, 0.0);
+        let t = view_transform(&from, &to, &up);
+        let expected = Matrix::new_with_data(4, 4, vec![
+            -0.50709,  0.50709,  0.67612, -2.36643,
+             0.76772,  0.60609,  0.12122, -2.82843,
+            -0.35857,  0.59761, -0.71714,  0.00000,
+             0.00000,  0.00000,  0.00000,  1.00000,
+        ]);
+        assert_eq!(t, expected);
     }
 }

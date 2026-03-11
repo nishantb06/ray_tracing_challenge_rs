@@ -153,3 +153,11 @@ prepare_computations() precomputes the point (in world space) where the intersec
 the eye vector (pointing back toward the eye, or camera)
 
 Add the following two tests, which show that prepare_computations() sets a fourth attribute, inside, which will be true if the hit occurs inside the object, and false otherwise. Notice, too, that the normal is inverted when the intersection is inside an object, so that the surface may be illuminated properly. Take the dot product of the two vectors, and if the result is nega- tive, they’re pointing in (roughly) opposite directions.
+
+To calculate the total number of line
+find src -name "*.rs" | xargs wc -l
+
+View transformation
+- pretends the eye moves instead of the world
+- the view transformation is actually moving the world with respect to the eye
+- Note that the up vector doesn’t need to be normalized. In fact, it doesn’t even need to be exactly perpendicular to the viewing direction. As you’ll see shortly, the view_transform() function will tidy that up vector, so you only have to point vaguely in the direction you want. Isn’t that convenient?
