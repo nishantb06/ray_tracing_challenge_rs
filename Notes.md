@@ -919,6 +919,30 @@ So the two scenarios drove it:
 It's a valid design. The only friction is at call sites like `shade_hit` where you have to unwrap it, but that's a small cost for accurately representing the "world with no light" state.
 ---------------------
 ---------------------
+All **125 tests pass**. Two things were fixed:
+
+**1. `ray_for_pixel` — forced `direction.w = 0.0`**
+
+After computing `pixel - origin`, tiny floating point errors in the matrix inverse could leave `w` at something like `1e-15` instead of exactly `0.0`, causing the `debug_assert` in `magnitude()` to fire.
+
+**2. `inverse_gauss_jordan` — proper partial pivoting**
+
+The original code did a single upfront pass swapping rows based only on column 0. For matrices like `rotation_y * translation`, this left a **zero on the diagonal** mid-elimination (division by zero → NaN). The fix: for each column `i`, find the row with the largest absolute value in that column and swap it into position before eliminating. This is standard partial pivoting and makes the algorithm numerically stable for all invertible matrices.
+
+        // Interchange rows so larger pivot values come first
+        for i in (1..n).rev() {
+            if aug.data[i - 1][0] < aug.data[i][0] {
+                aug.data.swap(i - 1, i);
+            }
+        }
+
+        // Eliminate to get identity on the left side (with partial pivoting)
+        for i in 0..n {
+            // Find the row with the largest absolute value in column i
+            let max_row = (i..n)
+                .max_by(|&a, &b| aug.data[a][i].abs().partial_cmp(&aug.data[b][i].abs()).unwrap())
+                .unwrap();
+            aug.data.swap(i, max_row);
 
 ---------------------
 ---------------------

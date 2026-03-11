@@ -1,4 +1,6 @@
 use crate::matrix::Matrix;
+use crate::tuple::Tuple;
+use crate::ray::Ray;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -14,6 +16,20 @@ pub struct Camera {
 
 #[allow(dead_code)]
 impl Camera {
+    pub fn ray_for_pixel(&self, px: usize, py: usize) -> Ray {
+        let x_offset = (px as f64 + 0.5) * self.pixel_size;
+        let y_offset = (py as f64 + 0.5) * self.pixel_size;
+        let world_x = self.half_width - x_offset;
+        let world_y = self.half_height - y_offset;
+        let inv = self.transform.inverse_gauss_jordan();
+        let pixel = &inv * &Tuple::point(world_x, world_y, -1.0);
+        let origin = &inv * &Tuple::point(0.0, 0.0, 0.0);
+        let mut direction = &pixel - &origin;
+        direction.w = 0.0;
+        let direction = direction.normalize();
+        Ray::new(origin, direction)
+    }
+
     pub fn new(hsize: usize, vsize: usize, field_of_view: f64) -> Self {
         let half_view = (field_of_view / 2.0).tan();
         let aspect = hsize as f64 / vsize as f64;
@@ -64,5 +80,33 @@ mod tests {
     fn pixel_size_for_vertical_canvas() {
         let c = Camera::new(125, 200, FRAC_PI_2);
         assert!(crate::utils::equal(c.pixel_size, 0.01));
+    }
+
+    #[test]
+    fn ray_through_center_of_canvas() {
+        let c = Camera::new(201, 101, FRAC_PI_2);
+        let r = c.ray_for_pixel(100, 50);
+        assert!(r.origin.is_equal(&crate::tuple::Tuple::point(0.0, 0.0, 0.0)));
+        assert!(r.direction.is_equal(&crate::tuple::Tuple::vector(0.0, 0.0, -1.0)));
+    }
+
+    #[test]
+    fn ray_through_corner_of_canvas() {
+        let c = Camera::new(201, 101, FRAC_PI_2);
+        let r = c.ray_for_pixel(0, 0);
+        assert!(r.origin.is_equal(&crate::tuple::Tuple::point(0.0, 0.0, 0.0)));
+        assert!(r.direction.is_equal(&crate::tuple::Tuple::vector(0.66519, 0.33259, -0.66851)));
+    }
+
+    #[test]
+    fn ray_when_camera_is_transformed() {
+        use std::f64::consts::FRAC_PI_4;
+        use crate::transformation::{rotation_y, translation};
+        let mut c = Camera::new(201, 101, FRAC_PI_2);
+        c.transform = &rotation_y(FRAC_PI_4) * &translation(0.0, -2.0, 5.0);
+        let r = c.ray_for_pixel(100, 50);
+        let sqrt2_over_2 = std::f64::consts::FRAC_1_SQRT_2;
+        assert!(r.origin.is_equal(&crate::tuple::Tuple::point(0.0, 2.0, -5.0)));
+        assert!(r.direction.is_equal(&crate::tuple::Tuple::vector(sqrt2_over_2, 0.0, -sqrt2_over_2)));
     }
 }
