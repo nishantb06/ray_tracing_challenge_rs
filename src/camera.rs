@@ -1,6 +1,8 @@
 use crate::matrix::Matrix;
 use crate::tuple::Tuple;
 use crate::ray::Ray;
+use crate::canvas::{Canvas, Color};
+use crate::world::{World, color_at};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -28,6 +30,18 @@ impl Camera {
         direction.w = 0.0;
         let direction = direction.normalize();
         Ray::new(origin, direction)
+    }
+
+    pub fn render(&self, world: &World) -> Canvas {
+        let mut image = Canvas::new(self.hsize, self.vsize);
+        for y in 0..self.vsize {
+            for x in 0..self.hsize {
+                let ray = self.ray_for_pixel(x, y);
+                let color = color_at(world, &ray);
+                image.write_pixel(x, y, color);
+            }
+        }
+        image
     }
 
     pub fn new(hsize: usize, vsize: usize, field_of_view: f64) -> Self {
@@ -108,5 +122,19 @@ mod tests {
         let sqrt2_over_2 = std::f64::consts::FRAC_1_SQRT_2;
         assert!(r.origin.is_equal(&crate::tuple::Tuple::point(0.0, 2.0, -5.0)));
         assert!(r.direction.is_equal(&crate::tuple::Tuple::vector(sqrt2_over_2, 0.0, -sqrt2_over_2)));
+    }
+
+    #[test]
+    fn rendering_a_world_with_a_camera() {
+        use crate::world::World;
+        use crate::transformation::view_transform;
+        let w = World::default_world();
+        let mut c = Camera::new(11, 11, FRAC_PI_2);
+        let from = Tuple::point(0.0, 0.0, -5.0);
+        let to = Tuple::point(0.0, 0.0, 0.0);
+        let up = Tuple::vector(0.0, 1.0, 0.0);
+        c.transform = view_transform(&from, &to, &up);
+        let image = c.render(&w);
+        assert!(image.pixel_at(5, 5).is_equal(&Color::new(0.38066, 0.47583, 0.2855)));
     }
 }
