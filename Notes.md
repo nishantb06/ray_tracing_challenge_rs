@@ -906,7 +906,17 @@ The `'_` is the **anonymous/elided lifetime**, and it tells Rust: "the lifetime 
 Without `<'_>`, the return type `Intersections` looks like it has no lifetime dependency, which is misleading — the returned value actually cannot outlive `self`. Adding `<'_>` makes that relationship visible in the signature.
 ---------------------
 ---------------------
+That was a deliberate design decision made when the world was first implemented — it directly mirrors the scenario from the book:
 
+> "Then w has no light source"
+
+A freshly created `World::new()` has **no light source**, and `Option<PointLight>` is the idiomatic Rust way to represent "this field may or may not exist." The alternative would be to not have a `light` field at all until one is assigned, but Rust structs need all fields defined upfront.
+
+So the two scenarios drove it:
+- `World::new()` → `light: None` (no light source yet)
+- `World::default_world()` → `light: Some(...)` (light source set)
+
+It's a valid design. The only friction is at call sites like `shade_hit` where you have to unwrap it, but that's a small cost for accurately representing the "world with no light" state.
 ---------------------
 ---------------------
 

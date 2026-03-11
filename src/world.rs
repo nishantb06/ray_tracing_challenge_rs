@@ -3,14 +3,15 @@ use crate::light::PointLight;
 use crate::tuple::Tuple;
 use crate::canvas::Color;
 use crate::transformation::scaling;
-use crate::intersection::{Intersection, Intersections};
+use crate::intersection::{Intersection, Intersections, Computations};
 use crate::ray::Ray;
+use crate::material::lighting;
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct World {
     pub objects: Vec<Sphere>,
-    pub light: Option<PointLight>,
+    pub lights: Vec<PointLight>,
 }
 
 #[allow(dead_code)]
@@ -18,7 +19,7 @@ impl World {
     pub fn new() -> Self {
         World {
             objects: Vec::new(),
-            light: None,
+            lights: Vec::new(),
         }
     }
 
@@ -38,7 +39,7 @@ impl World {
 
         World {
             objects: vec![s1, s2],
-            light: Some(light),
+            lights: vec![light],
         }
     }
 
@@ -66,6 +67,21 @@ impl World {
     }
 }
 
+// returns the color at the intersection encapsulated by comps, in the given world.
+// iterate over all lights and sum the colors
+pub fn shade_hit(world: &World, comps: &Computations) -> Color {
+    world.lights.iter().fold(Color::new(0.0, 0.0, 0.0), |acc, light| {
+        let c = lighting(
+            &comps.object.material,
+            light,
+            &comps.point,
+            &comps.eye_vector,
+            &comps.normal_vector,
+        );
+        &acc + &c
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,7 +91,7 @@ mod tests {
     fn creating_a_world() {
         let w = World::new();
         assert_eq!(w.objects.len(), 0);
-        assert!(w.light.is_none());
+        assert!(w.lights.is_empty());
     }
 
     #[test]
@@ -95,9 +111,9 @@ mod tests {
 
         let w = World::default_world();
 
-        let w_light = w.light.as_ref().expect("default world should have a light");
-        assert!(w_light.position.is_equal(&light.position));
-        assert!(w_light.intensity.is_equal(&light.intensity));
+        assert_eq!(w.lights.len(), 1);
+        assert!(w.lights[0].position.is_equal(&light.position));
+        assert!(w.lights[0].intensity.is_equal(&light.intensity));
         assert!(w.contains(&s1));
         assert!(w.contains(&s2));
     }
@@ -112,5 +128,31 @@ mod tests {
         assert!(crate::utils::equal(xs.data[1].t, 4.5));
         assert!(crate::utils::equal(xs.data[2].t, 5.5));
         assert!(crate::utils::equal(xs.data[3].t, 6.0));
+    }
+
+    #[test]
+    fn shading_an_intersection() {
+        let w = World::default_world();
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let shape = &w.objects[0];
+        let i = Intersection::new(4.0, shape);
+        let comps = crate::intersection::prepare_computations(&i, &r);
+        let c = shade_hit(&w, &comps);
+        assert!(c.is_equal(&Color::new(0.38066, 0.47583, 0.2855)));
+    }
+    
+    #[test]
+    fn shading_an_intersection_from_the_inside() {
+        let mut w = World::default_world();
+        w.lights = vec![PointLight::new(
+            Tuple::point(0.0, 0.25, 0.0),
+            Color::new(1.0, 1.0, 1.0),
+        )];
+        let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));
+        let shape = &w.objects[1];
+        let i = Intersection::new(0.5, shape);
+        let comps = crate::intersection::prepare_computations(&i, &r);
+        let c = shade_hit(&w, &comps);
+        assert!(c.is_equal(&Color::new(0.90498, 0.90498, 0.90498)));
     }
 }

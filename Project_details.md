@@ -151,3 +151,5 @@ world_normal ← transpose(inverse(transform)) * object_normal
 prepare_computations() precomputes the point (in world space) where the intersection occurred, the eye vector (pointing back toward the eye, or camera), and the normal vector.new data structure encapsulating some precomputed information relating to the intersection.
 
 the eye vector (pointing back toward the eye, or camera)
+
+Add the following two tests, which show that prepare_computations() sets a fourth attribute, inside, which will be true if the hit occurs inside the object, and false otherwise. Notice, too, that the normal is inverted when the intersection is inside an object, so that the surface may be illuminated properly. Take the dot product of the two vectors, and if the result is nega- tive, they’re pointing in (roughly) opposite directions.

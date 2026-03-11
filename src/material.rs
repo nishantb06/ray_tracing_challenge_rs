@@ -25,7 +25,13 @@ impl Material {
     }
 }
 
-pub fn lighting(m: &Material, light: &PointLight, point : &Tuple, eye_vector : &Tuple, normal_vector : &Tuple) -> Color {
+pub fn lighting(
+        m: &Material,
+        light: &PointLight,
+        point : &Tuple,
+        eye_vector : &Tuple,
+        normal_vector : &Tuple
+    ) -> Color {
     // combine the surface color with the light's color/intensity
     let effective_color = &m.color * &light.intensity;
     
