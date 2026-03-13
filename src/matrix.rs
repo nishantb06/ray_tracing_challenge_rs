@@ -1,5 +1,5 @@
-use crate::utils::{equal};
 use crate::tuple::Tuple;
+use crate::utils::equal;
 use std::ops::Mul;
 
 #[derive(Debug)]
@@ -7,20 +7,20 @@ use std::ops::Mul;
 pub struct Matrix {
     pub rows: usize,
     pub columns: usize,
-    pub data: Vec<Vec<f64>>
+    pub data: Vec<Vec<f64>>,
 }
 
 #[allow(dead_code)]
 impl Matrix {
     pub fn new(rows: usize, columns: usize) -> Self {
-        Matrix{
+        Matrix {
             rows,
             columns,
             data: vec![vec![0.0; columns as usize]; rows as usize],
         }
     }
 
-    pub fn new_with_data(rows: usize, columns: usize, data: Vec<f64>) -> Self{
+    pub fn new_with_data(rows: usize, columns: usize, data: Vec<f64>) -> Self {
         assert_eq!(
             data.len(),
             (rows * columns) as usize,
@@ -28,11 +28,7 @@ impl Matrix {
         );
         let mut data_iter = data.into_iter();
         let matrix: Vec<Vec<f64>> = (0..rows)
-            .map(|_| {
-                (0..columns)
-                    .map(|_| data_iter.next().unwrap())
-                    .collect()
-            })
+            .map(|_| (0..columns).map(|_| data_iter.next().unwrap()).collect())
             .collect();
 
         Matrix {
@@ -71,7 +67,10 @@ impl Matrix {
     }
 
     pub fn transpose_in_place(&mut self) {
-        assert_eq!(self.rows, self.columns, "In-place transpose only works for square matrices");
+        assert_eq!(
+            self.rows, self.columns,
+            "In-place transpose only works for square matrices"
+        );
         for i in 0..self.rows {
             for j in (i + 1)..self.columns {
                 let tmp = self.data[i][j];
@@ -98,15 +97,23 @@ impl Matrix {
     }
 
     pub fn inverse_gauss_jordan(&self) -> Self {
-        assert_eq!(self.rows, self.columns, "Only square matrices can be inverted");
+        assert_eq!(
+            self.rows, self.columns,
+            "Only square matrices can be inverted"
+        );
         let n = self.rows;
         let mut aug = self.augment_to_side(&Matrix::identity(n));
-    
+
         // Eliminate to get identity on the left side (with partial pivoting)
         for i in 0..n {
             // Find the row with the largest absolute value in column i
             let max_row = (i..n)
-                .max_by(|&a, &b| aug.data[a][i].abs().partial_cmp(&aug.data[b][i].abs()).unwrap())
+                .max_by(|&a, &b| {
+                    aug.data[a][i]
+                        .abs()
+                        .partial_cmp(&aug.data[b][i].abs())
+                        .unwrap()
+                })
                 .unwrap();
             aug.data.swap(i, max_row);
 
@@ -119,7 +126,7 @@ impl Matrix {
                 }
             }
         }
-    
+
         // Scale each row so diagonal becomes 1
         for i in 0..n {
             let temp = aug.data[i][i];
@@ -127,7 +134,7 @@ impl Matrix {
                 aug.data[i][j] /= temp;
             }
         }
-    
+
         // Extract the right half (the inverse)
         let mut result = Matrix::new(n, n);
         for i in 0..n {
@@ -166,10 +173,9 @@ impl Mul for &Matrix {
                 self.rows, self.columns, rhs.rows, rhs.columns
             )
         }
-        // pick one row from the lhs and take the weighted sum of the rows of the rhs 
+        // pick one row from the lhs and take the weighted sum of the rows of the rhs
         // considering the values from the choses row in lhs as weights
         // the resulting row will be inserted into the final matrix.
-
 
         let mut final_matrix: Vec<Vec<f64>> = Vec::new();
 
@@ -192,7 +198,7 @@ impl Mul for &Matrix {
         return Matrix::new_with_data(
             self.rows,
             rhs.columns,
-            final_matrix.into_iter().flatten().collect()
+            final_matrix.into_iter().flatten().collect(),
         );
     }
 }
@@ -201,7 +207,10 @@ impl Mul<&Tuple> for &Matrix {
     type Output = Tuple;
 
     fn mul(self, rhs: &Tuple) -> Self::Output {
-        assert!(self.columns == 4, "Matrix must have 4 columns to multiply with a Tuple");
+        assert!(
+            self.columns == 4,
+            "Matrix must have 4 columns to multiply with a Tuple"
+        );
         let tuple_col = [rhs.x, rhs.y, rhs.z, rhs.w];
         let mut result = [0.0; 4];
         for r in 0..self.rows {
@@ -217,7 +226,10 @@ impl Mul<&Matrix> for &Tuple {
     type Output = Tuple;
 
     fn mul(self, rhs: &Matrix) -> Self::Output {
-        assert!(rhs.rows == 4, "Matrix must have 4 rows to multiply with a Tuple");
+        assert!(
+            rhs.rows == 4,
+            "Matrix must have 4 rows to multiply with a Tuple"
+        );
         let tuple_row = [self.x, self.y, self.z, self.w];
         let mut result = [0.0; 4];
         for c in 0..rhs.columns {
@@ -236,34 +248,28 @@ mod tests {
     #[test]
     fn construct_and_inspect_4x4_matrix() {
         let data = vec![
-            1.0, 2.0, 3.0, 4.0,
-            5.5, 6.5, 7.5, 8.5,
-            9.0, 10.0, 11.0, 12.0,
-            13.5, 14.5, 15.5, 16.5,
+            1.0, 2.0, 3.0, 4.0, 5.5, 6.5, 7.5, 8.5, 9.0, 10.0, 11.0, 12.0, 13.5, 14.5, 15.5, 16.5,
         ];
-        let m = Matrix::new_with_data(4,4,data);
-        assert_eq!(m.data[0][0], 1.0);    // M[0,0]
-        assert_eq!(m.data[0][3], 4.0);    // M[0,3]
-        assert_eq!(m.data[1][0], 5.5);    // M[1,0]
-        assert_eq!(m.data[1][2], 7.5);    // M[1,2]
-        assert_eq!(m.data[2][2], 11.0);   // M[2,2]
-        assert_eq!(m.data[3][0], 13.5);   // M[3,0]
-        assert_eq!(m.data[3][2], 15.5);   // M[3,2]
+        let m = Matrix::new_with_data(4, 4, data);
+        assert_eq!(m.data[0][0], 1.0); // M[0,0]
+        assert_eq!(m.data[0][3], 4.0); // M[0,3]
+        assert_eq!(m.data[1][0], 5.5); // M[1,0]
+        assert_eq!(m.data[1][2], 7.5); // M[1,2]
+        assert_eq!(m.data[2][2], 11.0); // M[2,2]
+        assert_eq!(m.data[3][0], 13.5); // M[3,0]
+        assert_eq!(m.data[3][2], 15.5); // M[3,2]
     }
 
     #[test]
     fn construct_and_inspect_2x2_matrix() {
         // | -3 |  5 |
         // |  1 | -2 |
-        let data = vec![
-            -3.0, 5.0,
-             1.0, -2.0
-        ];
+        let data = vec![-3.0, 5.0, 1.0, -2.0];
         let m = Matrix::new_with_data(2, 2, data);
-        assert_eq!(m.data[0][0], -3.0);  // M[0,0]
-        assert_eq!(m.data[0][1], 5.0);   // M[0,1]
-        assert_eq!(m.data[1][0], 1.0);   // M[1,0]
-        assert_eq!(m.data[1][1], -2.0);  // M[1,1]
+        assert_eq!(m.data[0][0], -3.0); // M[0,0]
+        assert_eq!(m.data[0][1], 5.0); // M[0,1]
+        assert_eq!(m.data[1][0], 1.0); // M[1,0]
+        assert_eq!(m.data[1][1], -2.0); // M[1,1]
     }
 
     #[test]
@@ -271,24 +277,17 @@ mod tests {
         // | -3 |  5 |  0 |
         // |  1 | -2 | -7 |
         // |  0 |  1 |  1 |
-        let data = vec![
-            -3.0, 5.0, 0.0,
-             1.0, -2.0, -7.0,
-             0.0, 1.0, 1.0
-        ];
+        let data = vec![-3.0, 5.0, 0.0, 1.0, -2.0, -7.0, 0.0, 1.0, 1.0];
         let m = Matrix::new_with_data(3, 3, data);
-        assert_eq!(m.data[0][0], -3.0);  // M[0,0]
-        assert_eq!(m.data[1][1], -2.0);  // M[1,1]
-        assert_eq!(m.data[2][2], 1.0);   // M[2,2]
+        assert_eq!(m.data[0][0], -3.0); // M[0,0]
+        assert_eq!(m.data[1][1], -2.0); // M[1,1]
+        assert_eq!(m.data[2][2], 1.0); // M[2,2]
     }
 
     #[test]
     fn matrix_equality_with_identical_matrices() {
         let data = vec![
-            1.0, 2.0, 3.0, 4.0,
-            5.0, 6.0, 7.0, 8.0,
-            9.0, 8.0, 7.0, 6.0,
-            5.0, 4.0, 3.0, 2.0,
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
         ];
         let m1 = Matrix::new_with_data(4, 4, data.clone());
         let m2 = Matrix::new_with_data(4, 4, data);
@@ -298,52 +297,59 @@ mod tests {
 
     #[test]
     fn matrix_equality_with_different_matrices() {
-        let a = Matrix::new_with_data(4, 4, vec![
-            1.0, 2.0, 3.0, 4.0,
-            5.0, 6.0, 7.0, 8.0,
-            9.0, 8.0, 7.0, 6.0,
-            5.0, 4.0, 3.0, 2.0,
-        ]);
-        let b = Matrix::new_with_data(4, 4, vec![
-            2.0, 3.0, 4.0, 5.0,
-            6.0, 7.0, 8.0, 9.0,
-            8.0, 7.0, 6.0, 5.0,
-            4.0, 3.0, 2.0, 1.0,
-        ]);
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+            ],
+        );
+        let b = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0,
+            ],
+        );
         assert!(a != b);
     }
 
     #[test]
     fn multiplying_two_matrices() {
-        let a = Matrix::new_with_data(4, 4, vec![
-            1.0, 2.0, 3.0, 4.0,
-            5.0, 6.0, 7.0, 8.0,
-            9.0, 8.0, 7.0, 6.0,
-            5.0, 4.0, 3.0, 2.0,
-        ]);
-        let b = Matrix::new_with_data(4, 4, vec![
-            -2.0, 1.0, 2.0, 3.0,
-             3.0, 2.0, 1.0,-1.0,
-             4.0, 3.0, 6.0, 5.0,
-             1.0, 2.0, 7.0, 8.0,
-        ]);
-        let expected = Matrix::new_with_data(4, 4, vec![
-            20.0, 22.0, 50.0, 48.0,
-            44.0, 54.0,114.0,108.0,
-            40.0, 58.0,110.0,102.0,
-            16.0, 26.0, 46.0, 42.0,
-        ]);
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+            ],
+        );
+        let b = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                -2.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0, -1.0, 4.0, 3.0, 6.0, 5.0, 1.0, 2.0, 7.0, 8.0,
+            ],
+        );
+        let expected = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                20.0, 22.0, 50.0, 48.0, 44.0, 54.0, 114.0, 108.0, 40.0, 58.0, 110.0, 102.0, 16.0,
+                26.0, 46.0, 42.0,
+            ],
+        );
         assert!(&a * &b == expected);
     }
 
     #[test]
     fn matrix_multiplied_by_tuple() {
-        let a = Matrix::new_with_data(4, 4, vec![
-            1.0, 2.0, 3.0, 4.0,
-            2.0, 4.0, 4.0, 2.0,
-            8.0, 6.0, 4.0, 1.0,
-            0.0, 0.0, 0.0, 1.0,
-        ]);
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 4.0, 2.0, 8.0, 6.0, 4.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+            ],
+        );
         let b = Tuple::new(1.0, 2.0, 3.0, 1.0);
         let expected = Tuple::new(18.0, 24.0, 33.0, 1.0);
         assert!((&a * &b).is_equal(&expected));
@@ -352,28 +358,30 @@ mod tests {
     #[test]
     fn tuple_multiplied_by_matrix() {
         let a = Tuple::new(1.0, 2.0, 3.0, 1.0);
-        let b = Matrix::new_with_data(4, 4, vec![
-            1.0, 2.0, 3.0, 4.0,
-            2.0, 4.0, 4.0, 2.0,
-            8.0, 6.0, 4.0, 1.0,
-            0.0, 0.0, 0.0, 1.0,
-        ]);
+        let b = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 4.0, 2.0, 8.0, 6.0, 4.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+            ],
+        );
         let expected = Tuple::new(29.0, 28.0, 23.0, 12.0);
         assert!((&a * &b).is_equal(&expected));
     }
 
     #[test]
     fn multiplying_matrix_by_identity_matrix() {
-        let a = Matrix::new_with_data(4, 4, vec![
-            0.0, 1.0,  2.0,  4.0,
-            1.0, 2.0,  4.0,  8.0,
-            2.0, 4.0,  8.0, 16.0,
-            4.0, 8.0, 16.0, 32.0,
-        ]);
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                0.0, 1.0, 2.0, 4.0, 1.0, 2.0, 4.0, 8.0, 2.0, 4.0, 8.0, 16.0, 4.0, 8.0, 16.0, 32.0,
+            ],
+        );
         let identity = Matrix::identity(4);
         assert!(&a * &identity == a);
     }
-    
+
     #[test]
     fn multiplying_identity_matrix_by_tuple() {
         let identity = Matrix::identity(4);
@@ -384,102 +392,114 @@ mod tests {
 
     #[test]
     fn transposing_a_matrix() {
-        let a = Matrix::new_with_data(4, 4, vec![
-            0.0, 9.0, 3.0, 0.0,
-            9.0, 8.0, 0.0, 8.0,
-            1.0, 8.0, 5.0, 3.0,
-            0.0, 0.0, 5.0, 8.0,
-        ]);
-        let expected = Matrix::new_with_data(4, 4, vec![
-            0.0, 9.0, 1.0, 0.0,
-            9.0, 8.0, 8.0, 0.0,
-            3.0, 0.0, 5.0, 5.0,
-            0.0, 8.0, 3.0, 8.0,
-        ]);
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                0.0, 9.0, 3.0, 0.0, 9.0, 8.0, 0.0, 8.0, 1.0, 8.0, 5.0, 3.0, 0.0, 0.0, 5.0, 8.0,
+            ],
+        );
+        let expected = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                0.0, 9.0, 1.0, 0.0, 9.0, 8.0, 8.0, 0.0, 3.0, 0.0, 5.0, 5.0, 0.0, 8.0, 3.0, 8.0,
+            ],
+        );
         let a_t = a.transpose();
         assert!(a_t == expected);
         // a is still valid after transpose
-        assert!(a == Matrix::new_with_data(4, 4, vec![
-            0.0, 9.0, 3.0, 0.0,
-            9.0, 8.0, 0.0, 8.0,
-            1.0, 8.0, 5.0, 3.0,
-            0.0, 0.0, 5.0, 8.0,
-        ]));
+        assert!(
+            a == Matrix::new_with_data(
+                4,
+                4,
+                vec![
+                    0.0, 9.0, 3.0, 0.0, 9.0, 8.0, 0.0, 8.0, 1.0, 8.0, 5.0, 3.0, 0.0, 0.0, 5.0, 8.0,
+                ]
+            )
+        );
     }
 
     #[test]
     fn augmenting_matrix_with_identity() {
-        let a = Matrix::new_with_data(3, 3, vec![
-            1.0, 2.0, 3.0,
-            4.0, 5.0, 6.0,
-            7.0, 8.0, 9.0,
-        ]);
+        let a = Matrix::new_with_data(3, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
         let identity = Matrix::identity(3);
         let aug = a.augment_to_side(&identity);
-        let expected = Matrix::new_with_data(3, 6, vec![
-            1.0, 2.0, 3.0, 1.0, 0.0, 0.0,
-            4.0, 5.0, 6.0, 0.0, 1.0, 0.0,
-            7.0, 8.0, 9.0, 0.0, 0.0, 1.0,
-        ]);
+        let expected = Matrix::new_with_data(
+            3,
+            6,
+            vec![
+                1.0, 2.0, 3.0, 1.0, 0.0, 0.0, 4.0, 5.0, 6.0, 0.0, 1.0, 0.0, 7.0, 8.0, 9.0, 0.0,
+                0.0, 1.0,
+            ],
+        );
         assert!(aug == expected);
         // original matrix is still valid
-        assert!(a == Matrix::new_with_data(3, 3, vec![
-            1.0, 2.0, 3.0,
-            4.0, 5.0, 6.0,
-            7.0, 8.0, 9.0,
-        ]));
+        assert!(
+            a == Matrix::new_with_data(3, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0,])
+        );
     }
 
     #[test]
     fn calculating_inverse_of_matrix_1() {
-        let a = Matrix::new_with_data(4, 4, vec![
-             8.0, -5.0,  9.0,  2.0,
-             7.0,  5.0,  6.0,  1.0,
-            -6.0,  0.0,  9.0,  6.0,
-            -3.0,  0.0, -9.0, -4.0,
-        ]);
-        let expected = Matrix::new_with_data(4, 4, vec![
-            -0.15385, -0.15385, -0.28205, -0.53846,
-            -0.07692,  0.12308,  0.02564,  0.03077,
-             0.35897,  0.35897,  0.43590,  0.92308,
-            -0.69231, -0.69231, -0.76923, -1.92308,
-        ]);
-        assert!(a.inverse_gauss_jordan() == expected);
-    }
-    
-    #[test]
-    fn calculating_inverse_of_matrix_2() {
-        let a = Matrix::new_with_data(4, 4, vec![
-             9.0,  3.0,  0.0,  9.0,
-            -5.0, -2.0, -6.0, -3.0,
-            -4.0,  9.0,  6.0,  4.0,
-            -7.0,  6.0,  6.0,  2.0,
-        ]);
-        let expected = Matrix::new_with_data(4, 4, vec![
-            -0.04074, -0.07778,  0.14444, -0.22222,
-            -0.07778,  0.03333,  0.36667, -0.33333,
-            -0.02901, -0.14630, -0.10926,  0.12963,
-             0.17778,  0.06667, -0.26667,  0.33333,
-        ]);
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                8.0, -5.0, 9.0, 2.0, 7.0, 5.0, 6.0, 1.0, -6.0, 0.0, 9.0, 6.0, -3.0, 0.0, -9.0, -4.0,
+            ],
+        );
+        let expected = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                -0.15385, -0.15385, -0.28205, -0.53846, -0.07692, 0.12308, 0.02564, 0.03077,
+                0.35897, 0.35897, 0.43590, 0.92308, -0.69231, -0.69231, -0.76923, -1.92308,
+            ],
+        );
         assert!(a.inverse_gauss_jordan() == expected);
     }
 
     #[test]
-fn multiplying_product_by_its_inverse() {
-    let a = Matrix::new_with_data(4, 4, vec![
-         3.0, -9.0,  7.0,  3.0,
-         3.0, -8.0,  2.0, -9.0,
-        -4.0,  4.0,  4.0,  1.0,
-        -6.0,  5.0, -1.0,  1.0,
-    ]);
-    let b = Matrix::new_with_data(4, 4, vec![
-        8.0,  2.0, 2.0, 2.0,
-        3.0, -1.0, 7.0, 0.0,
-        7.0,  0.0, 5.0, 4.0,
-        6.0, -2.0, 0.0, 5.0,
-    ]);
-    let c = &a * &b;
-    let b_inv = b.inverse_gauss_jordan();
-    assert!(&c * &b_inv == a);
-}
+    fn calculating_inverse_of_matrix_2() {
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                9.0, 3.0, 0.0, 9.0, -5.0, -2.0, -6.0, -3.0, -4.0, 9.0, 6.0, 4.0, -7.0, 6.0, 6.0,
+                2.0,
+            ],
+        );
+        let expected = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                -0.04074, -0.07778, 0.14444, -0.22222, -0.07778, 0.03333, 0.36667, -0.33333,
+                -0.02901, -0.14630, -0.10926, 0.12963, 0.17778, 0.06667, -0.26667, 0.33333,
+            ],
+        );
+        assert!(a.inverse_gauss_jordan() == expected);
+    }
+
+    #[test]
+    fn multiplying_product_by_its_inverse() {
+        let a = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                3.0, -9.0, 7.0, 3.0, 3.0, -8.0, 2.0, -9.0, -4.0, 4.0, 4.0, 1.0, -6.0, 5.0, -1.0,
+                1.0,
+            ],
+        );
+        let b = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                8.0, 2.0, 2.0, 2.0, 3.0, -1.0, 7.0, 0.0, 7.0, 0.0, 5.0, 4.0, 6.0, -2.0, 0.0, 5.0,
+            ],
+        );
+        let c = &a * &b;
+        let b_inv = b.inverse_gauss_jordan();
+        assert!(&c * &b_inv == a);
+    }
 }
