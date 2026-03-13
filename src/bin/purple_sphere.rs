@@ -30,10 +30,10 @@ fn main() {
     // shape.set_transform(shearing(1.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
     // shape.set_transform(translation(1.0, 0.5, 0.0));
-    // let light = PointLight::new(
-    //     Tuple::point(-10.0, 10.0, -10.0),
-    //     Color::new(1.0, 1.0, 1.0),
-    // );
+    let light = PointLight::new(
+        Tuple::point(-10.0, 10.0, -10.0),
+        Color::new(1.0, 1.0, 1.0),
+    );
 
     // let t = &translation(0.5, 0.0, 0.0) * &(&scaling(0.5, 1.0, 1.0) * &rotation_z(0.8));
     // shape.set_transform(t);
