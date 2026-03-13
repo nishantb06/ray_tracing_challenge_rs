@@ -1,6 +1,7 @@
+use crate::ray::Ray;
 use crate::sphere::Sphere;
 use crate::tuple::Tuple;
-use crate::ray::Ray;
+use crate::utils::EPSILON;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -29,6 +30,7 @@ pub struct Computations<'a> {
     pub eye_vector: Tuple,
     pub normal_vector: Tuple,
     pub inside: bool,
+    pub over_point: Tuple,
 }
 
 // precomputes the point (in world space) where the intersection occurred,
@@ -42,6 +44,7 @@ pub fn prepare_computations<'a>(intersection: &'a Intersection<'a>, ray: &Ray) -
         inside = true;
         normal_v = -&normal_v;
     }
+    let over_point = &point + &(&normal_v * EPSILON);
     Computations {
         t: intersection.t.clone(),
         object: intersection.object,
@@ -49,6 +52,7 @@ pub fn prepare_computations<'a>(intersection: &'a Intersection<'a>, ray: &Ray) -
         eye_vector: eye_v,
         normal_vector: normal_v,
         inside,
+        over_point,
     }
 }
 
@@ -145,7 +149,7 @@ mod tests {
         assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
         assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
     }
-    
+
     #[test]
     fn the_hit_when_intersection_occurs_on_the_outside() {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
@@ -154,7 +158,7 @@ mod tests {
         let comps = prepare_computations(&i, &r);
         assert!(!comps.inside);
     }
-    
+
     #[test]
     fn the_hit_when_intersection_occurs_on_the_inside() {
         let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));

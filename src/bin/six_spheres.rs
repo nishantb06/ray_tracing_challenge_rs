@@ -75,7 +75,7 @@ fn main() {
 
     let canvas = camera.render(&world);
     let ppm = canvas.canvas_to_ppm();
-    std::fs::write("media/images_ppm/six_spheres.ppm", ppm)
-        .expect("Failed to write six_spheres.ppm");
-    println!("Saved to media/images_ppm/six_spheres.ppm");
+    std::fs::write("media/images_ppm/six_spheres_shadowed.ppm", ppm)
+        .expect("Failed to write six_spheres_shadowed.ppm");
+    println!("Saved to media/images_ppm/six_spheres_shadowed.ppm");
 }

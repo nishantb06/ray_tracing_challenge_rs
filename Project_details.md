@@ -1,8 +1,9 @@
 - Note that the x and y parameters are assumed to be 0-based in this book. That is to say, x may be anywhere from 0 to width - 1 (inclusive), and y may be anywhere from 0 to height - 1 (inclusive).
-- Indexing: Pixels are stored in row-major order, so (x, y) maps to y * width + x.
-Bounds: The code assumes x < width and y < height. You can add debug_assert! or explicit checks if you want.
-red.clone(): Needed because write_pixel takes ownership of Color; Color already derives Clone.
-- 
+- Indexing: Pixels are stored in row-major order, so (x, y) maps to y \* width + x.
+  Bounds: The code assumes x < width and y < height. You can add debug_assert! or explicit checks if you want.
+  red.clone(): Needed because write_pixel takes ownership of Color; Color already derives Clone.
+-
+
 ## Canvas overview
 
 ### Layout
@@ -47,49 +48,50 @@ Ray tracing often uses a bottom-left origin. To support that, flip `y` when writ
 // Convert from bottom-left y to top-left row index
 let row = self.height - 1 - y;
 ```
-Translation 
-| 1  0  0  x |
-| 0  1  0  y |
-| 0  0  1  z |
-| 0  0  0  1 |
 
-Scaling 
-| x  0  0  0 |
-| 0  y  0  0 |
-| 0  0  z  0 |
-| 0  0  0  1 |
+Translation
+| 1 0 0 x |
+| 0 1 0 y |
+| 0 0 1 z |
+| 0 0 0 1 |
+
+Scaling
+| x 0 0 0 |
+| 0 y 0 0 |
+| 0 0 z 0 |
+| 0 0 0 1 |
 scaling moves it by multiplication. When applied to an object centered at the origin, this transformation scales all points on the object, effectively making it larger (if the scale value is greater than 1) or smaller (if the scale value is less than 1), as shown in the figure.
 
- Reflection is a transformation that takes a point and reflects it—moving it to the other side of an axis. It can be useful when you have an object in your scene that you want to flip (or mirror) in some direction. Maybe the model is leaning the wrong way, facing the wrong direction. Maybe it’s a face that’s looking to the right when you want it looking to the left. Rather than breaking out a 3D modeler and editing the model, you can simply reflect the model across the appropriate axis.
+Reflection is a transformation that takes a point and reflects it—moving it to the other side of an axis. It can be useful when you have an object in your scene that you want to flip (or mirror) in some direction. Maybe the model is leaning the wrong way, facing the wrong direction. Maybe it’s a face that’s looking to the right when you want it looking to the left. Rather than breaking out a 3D modeler and editing the model, you can simply reflect the model across the appropriate axis.
 
- Rotation
- Multiplying a tuple by a rotation matrix will rotate that tuple around an axis. This can get complicated if you’re trying to rotate around an arbitrary line, so we’re not going to take that route. We’re only going to deal with the simplest rotations here—rotating around the x, y, and z axes.
+Rotation
+Multiplying a tuple by a rotation matrix will rotate that tuple around an axis. This can get complicated if you’re trying to rotate around an arbitrary line, so we’re not going to take that route. We’re only going to deal with the simplest rotations here—rotating around the x, y, and z axes.
 
- The rotation will appear to be clockwise around the corresponding axis when viewed along that axis, toward the negative end. So, if you’re rotating around the x axis, it will rotate as depicted in the following figure.
+The rotation will appear to be clockwise around the corresponding axis when viewed along that axis, toward the negative end. So, if you’re rotating around the x axis, it will rotate as depicted in the following figure.
 
- Another way to describe this is to say that rotations in your ray tracer will
+Another way to describe this is to say that rotations in your ray tracer will
 obey the left-hand rule, which harks back to Left-Handed vs. Right-Handed Coordinates, on page 3: if you point the thumb of your left hand in the direction of the axis of rotation, then the rotation itself will follow the direction of your remaining fingers as you curl them toward the palm of your hand.
 
 Each of the three axes requires a different matrix to implement the rotation, so we’ll look at them each in turn. Angles will be given in radians, so if your math library prefers other units (like degrees), you’ll need to adapt accordingly.
 
 This first rotation matrix rotates a tuple some number of radians around the x axis,
-X                           
-| 1    0       0      0 |   
-| 0    cos(r) -sin(r) 0 |
-| 0    sin(r)  cos(r) 0 |
-| 0    0       0      1 |
+X  
+| 1 0 0 0 |  
+| 0 cos(r) -sin(r) 0 |
+| 0 sin(r) cos(r) 0 |
+| 0 0 0 1 |
 
 Y
-|  cos(r)  0  sin(r)  0 |
-|  0       1  0       0 |
-| -sin(r)  0  cos(r)  0 |
-|  0       0  0       1 |
+| cos(r) 0 sin(r) 0 |
+| 0 1 0 0 |
+| -sin(r) 0 cos(r) 0 |
+| 0 0 0 1 |
 
 Z
-| cos(r) -sin(r)  0  0 |
-| sin(r)  cos(r)  0  0 |
-| 0       0       1  0 |
-| 0       0       0  1 |
+| cos(r) -sin(r) 0 0 |
+| sin(r) cos(r) 0 0 |
+| 0 0 1 0 |
+| 0 0 0 1 |
 
 A shearing (or skew) transformation has the effect of making straight lines slanted. It’s probably the most (visually) complex transformation that we’ll implement, though the implementation is no more complicated than any of the others.
 When applied to a tuple, a shearing transformation changes each component of the tuple in proportion to the other two components. So the x component changes in proportion to y and z, y changes in proportion to x and z, and z changes in proportion to x and y.
@@ -103,15 +105,13 @@ Write the following tests, demonstrating how a point is affected by each of thes
 Chaining
 So, if you want a single matrix that rotates, and then scales, and then translates, you can multiply the translation matrix by the scaling matrix, and then by the rotation matrix. That is to say, you must concatenate the transformations in reverse order to have them applied in the order you want! Add the following tests to demonstrate this (particularly counterintuitive) result.
 
-
-TODO operator overloading is not implemented for tuple 
-
+TODO operator overloading is not implemented for tuple
 
 When rendering your scene, you’ll need to be able to identify which one of all the intersections is actually visible from the ray’s origin. Some may be behind the ray, and others may be hidden behind (or occluded by) other objects. For the sake of discussion, we’ll call the visible intersection the hit. This is really the only intersection that matters for most things.
 
 The hit will never be behind the ray’s origin, since that’s effectively behind the camera, so you can ignore all intersections with negative t values when determining the hit. In fact, the hit will always be the intersection with the lowest nonnegative t value.
 
-Don’t let that last test trip you up! The intersections are intentionally given in random order; it’s up to your intersections() function to maintain a sorted list or, at the very least, sort the list on demand. This will be important down the road when you have more complicated scenes with multiple objects. It won’t be feasible for each shape to manually preserve the sort order of that intersec- tion list. We might need to implement a more efficient data structure to track the hits like a Binary indexed Tree or Segment tree which can keep the hits sorted 
+Don’t let that last test trip you up! The intersections are intentionally given in random order; it’s up to your intersections() function to maintain a sorted list or, at the very least, sort the list on demand. This will be important down the road when you have more complicated scenes with multiple objects. It won’t be feasible for each shape to manually preserve the sort order of that intersec- tion list. We might need to implement a more efficient data structure to track the hits like a Binary indexed Tree or Segment tree which can keep the hits sorted
 
 In other words: whatever transformation you want to apply to the sphere, apply the inverse of that transformation to the ray, instead. Crazy, right? But it works!
 
@@ -130,20 +130,20 @@ the eye exists that is looking at the scene).
 • N is the surface normal, a vector that is perpendicular to the surface at P.
 • R is the reflection vector, pointing in the direction that incoming light would bounce, or reflect.
 
- first you have to convert the point from world space to object space by multiplying the point by the inverse of the transformation matrix, thus:
+first you have to convert the point from world space to object space by multiplying the point by the inverse of the transformation matrix, thus:
 
- object_point ← inverse(transform) * world_point
+object_point ← inverse(transform) \* world_point
 
- With that point now in object space, you can compute the normal as before, because in object space, the sphere’s origin is at the world’s origin. However! The normal vector you get will also be in object space...and to draw anything useful with it you’re going to need to convert it back to world space somehow.
+With that point now in object space, you can compute the normal as before, because in object space, the sphere’s origin is at the world’s origin. However! The normal vector you get will also be in object space...and to draw anything useful with it you’re going to need to convert it back to world space somehow.
 
- So how do you go about keeping the normals perpendicular to their surface? The answer is to multiply the normal by the inverse transpose matrix instead. So you take your transformation matrix, invert it, and then transpose the result. This is what you need to multiply the normal by.
-world_normal ← transpose(inverse(transform)) * object_normal
+So how do you go about keeping the normals perpendicular to their surface? The answer is to multiply the normal by the inverse transpose matrix instead. So you take your transformation matrix, invert it, and then transpose the result. This is what you need to multiply the normal by.
+world_normal ← transpose(inverse(transform)) \* object_normal
 
- Technically, you should be finding submatrix(transform, 3, 3) (from Spotting Submatrices, on page 34) first, and multiplying by the inverse and transpose of that. Otherwise, if your transform includes any kind of translation, then multiplying by its transpose will wind up mucking with the w coordinate in your vector, which will wreak all kinds of havoc in later computations. But if you don’t mind a bit of a hack, you can avoid all that by just setting world_normal.w to 0 after multiplying by the 4x4 inverse transpose matrix.
+Technically, you should be finding submatrix(transform, 3, 3) (from Spotting Submatrices, on page 34) first, and multiplying by the inverse and transpose of that. Otherwise, if your transform includes any kind of translation, then multiplying by its transpose will wind up mucking with the w coordinate in your vector, which will wreak all kinds of havoc in later computations. But if you don’t mind a bit of a hack, you can avoid all that by just setting world_normal.w to 0 after multiplying by the 4x4 inverse transpose matrix.
 
- The inverse transpose matrix may change the length of your vector, so if you feed it a vector of length 1 (a normalized vector), you may not get a normalized vector out! It’s best to be safe, and always normalize the result.
+The inverse transpose matrix may change the length of your vector, so if you feed it a vector of length 1 (a normalized vector), you may not get a normalized vector out! It’s best to be safe, and always normalize the result.
 
- It simulates the interaction between three different types of lighting:
+It simulates the interaction between three different types of lighting:
 • Ambient reflection is background lighting, or light reflected from other objects in the environment. The Phong model treats this as a constant, coloring all points on the surface equally.
 • Diffuse reflection is light reflected from a matte surface. It depends only on the angle between the light source and the surface normal.
 • Specular reflection is the reflection of the light source itself and results in what is called a specular highlight—the bright spot on a curved surface. It depends only on the angle between the reflection vector and the eye vector and is controlled by a parameter that we’ll call shininess. The higher the shininess, the smaller and tighter the specular highlight.
@@ -155,9 +155,10 @@ the eye vector (pointing back toward the eye, or camera)
 Add the following two tests, which show that prepare_computations() sets a fourth attribute, inside, which will be true if the hit occurs inside the object, and false otherwise. Notice, too, that the normal is inverted when the intersection is inside an object, so that the surface may be illuminated properly. Take the dot product of the two vectors, and if the result is nega- tive, they’re pointing in (roughly) opposite directions.
 
 To calculate the total number of line
-find src -name "*.rs" | xargs wc -l
+find src -name "\*.rs" | xargs wc -l
 
 View transformation
+
 - pretends the eye moves instead of the world
 - the view transformation is actually moving the world with respect to the eye
 - Note that the up vector doesn’t need to be normalized. In fact, it doesn’t even need to be exactly perpendicular to the viewing direction. As you’ll see shortly, the view_transform() function will tidy that up vector, so you only have to point vaguely in the direction you want. Isn’t that convenient?
@@ -171,3 +172,26 @@ The camera is defined by the following four attributes:
 One of the primary responsibilities of the camera is to map the three-dimen- sional scene onto a two-dimensional canvas. To do this, you’ll make the camera do just what you’ve done in previous exercises and place the canvas somewhere in the scene so that rays can be projected through it. But contrary to what you’ve done before, the camera’s canvas will always be exactly one unit in front of the camera. As you’ll see shortly, this makes the math a bit cleaner.
 
 You’ll use the pixel_size and those half_width and half_height values you computed to create rays that can pass through any given pixel on the canvas. Implement the following three tests to ensure this works. These introduce a new function, ray_for_pixel(camera, x, y), which returns a new ray that starts at the camera and passes through the indicated (x, y) pixel on the canvas. The first two tests use an untransformed camera to cast rays through the center and corner of the canvas, and the third tries a ray with a camera that has been translated and rotated.
+
+A ray tracer computes shadows by casting a ray, called a shadow ray, from each point of intersection toward the light source. If something intersects that shadow ray between the point and the light source, then the point is considered to be in shadow. You’re going to write a new function, is_shadowed(world, point), which will do just this.
+
+Note that the test compares the over_point’s z component to half of -EPSILON to
+make sure the point has been adjusted in the correct direction.
+In pseudocode, your prepare_computations() function will need to do something like this:
+
+# after computing and (if appropriate) negating
+
+# the normal vector...
+
+comps.over_point ← comps.point + comps.normalv \* EPSILON
+
+This effect is called acne, and it happens because computers cannot represent floating point numbers very precisely. In general they do okay, but because of rounding errors, it will be impossible to say exactly where a ray intersects a surface. The answer you get will be close—generally within a tiny margin of error—but that wiggle is sometimes just enough to cause the calculated point of intersection to lie beneath the actual surface of the sphere.
+
+As a result, the shadow ray intersects the sphere itself, causing the sphere to cast a shadow on its own point of intersection. This is obviously not ideal.
+The solution is to adjust the point just slightly in the direction of the normal, before you test for shadows. This will bump it above the surface and prevent self-shadowing.
+
+1. Measure the distance from point to the light source by subtracting point from the light position, and taking the magnitude of the resulting vector. Call this distance.
+2. Create a ray from point toward the light source by normalizing the vector from step 1.
+3. Intersect the world with that ray.
+4. Check to see if there was a hit, and if so, whether t is less than distance. If
+   so, the hit lies between the point and the light source, and the point is in shadow
