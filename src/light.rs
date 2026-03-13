@@ -1,5 +1,5 @@
-use crate::tuple::Tuple;
 use crate::canvas::Color;
+use crate::tuple::Tuple;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -11,7 +11,10 @@ pub struct PointLight {
 #[allow(dead_code)]
 impl PointLight {
     pub fn new(position: Tuple, intensity: Color) -> Self {
-        PointLight { position, intensity }
+        PointLight {
+            position,
+            intensity,
+        }
     }
 }
 

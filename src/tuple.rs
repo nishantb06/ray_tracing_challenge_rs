@@ -1,5 +1,5 @@
-use std::ops::{Add,Sub,Neg,Div,Mul};
-use crate::utils::{equal};
+use crate::utils::equal;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(dead_code)] // suppresses the warnings
@@ -16,19 +16,19 @@ impl Tuple {
         Self { x, y, z, w }
     }
 
-    pub fn point(x: f64, y:f64, z: f64) -> Self {
-        Self { x, y, z, w : 1.0 }
+    pub fn point(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z, w: 1.0 }
     }
 
-    pub fn vector(x: f64, y:f64, z: f64) -> Self {
-        Self { x, y, z, w : 0.0 }
+    pub fn vector(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z, w: 0.0 }
     }
 
     pub fn is_equal(&self, other: &Self) -> bool {
-        return equal(self.x, other.x) 
+        return equal(self.x, other.x)
             && equal(self.y, other.y)
             && equal(self.z, other.z)
-            && equal(self.w, other.w)
+            && equal(self.w, other.w);
     }
 
     pub fn magnitude(&self) -> f64 {
@@ -38,7 +38,10 @@ impl Tuple {
 
     pub fn normalize(&self) -> Self {
         let mag = self.magnitude();
-        debug_assert!(self.w == 0.0, "normalize should only be called on vectors (w = 0.0)");
+        debug_assert!(
+            self.w == 0.0,
+            "normalize should only be called on vectors (w = 0.0)"
+        );
         debug_assert!(mag >= crate::utils::EPSILON, "Cannot normalize zero vector");
         assert!(mag >= crate::utils::EPSILON, "Cannot normalize zero vector");
         Tuple {
@@ -160,7 +163,12 @@ mod tests {
         let v = Tuple::vector(1.0, 2.0, 3.0);
         let t = Tuple::new(1.0, 2.0, 3.0, 0.0);
         // assert_eq!(v, t);
-        assert!(v.is_equal(&t), "Tuple::vector did not create a tuple with w = 0.0 as expected: {:?} vs {:?}", v, t);
+        assert!(
+            v.is_equal(&t),
+            "Tuple::vector did not create a tuple with w = 0.0 as expected: {:?} vs {:?}",
+            v,
+            t
+        );
     }
 
     #[test]
@@ -168,7 +176,12 @@ mod tests {
         let p = Tuple::point(1.0, 2.0, 3.0);
         let t = Tuple::new(1.0, 2.0, 3.0, 1.0);
         // assert_eq!(p, t);
-        assert!(p.is_equal(&t), "Tuple::point did not create a tuple with w = 1.0 as expected: {:?} vs {:?}", p, t);
+        assert!(
+            p.is_equal(&t),
+            "Tuple::point did not create a tuple with w = 1.0 as expected: {:?} vs {:?}",
+            p,
+            t
+        );
     }
 
     #[test]
@@ -263,13 +276,13 @@ mod tests {
         let v = Tuple::vector(1.0, 0.0, 0.0);
         assert!(crate::utils::equal(v.magnitude(), 1.0));
     }
-    
+
     #[test]
     fn magnitude_of_vector_123() {
         let v = Tuple::vector(1.0, 2.0, 3.0);
         assert!(crate::utils::equal(v.magnitude(), 14.0_f64.sqrt()));
     }
-    
+
     #[test]
     fn normalize_vector() {
         let v = Tuple::vector(4.0, 0.0, 0.0);
@@ -277,7 +290,7 @@ mod tests {
         let expected = Tuple::vector(1.0, 0.0, 0.0);
         assert!(n.is_equal(&expected));
     }
-    
+
     #[test]
     fn normalized_vector_has_magnitude_one() {
         let v = Tuple::vector(1.0, 2.0, 3.0);
@@ -312,7 +325,11 @@ mod tests {
     #[test]
     fn reflecting_a_vector_off_a_slanted_surface() {
         let v = Tuple::vector(0.0, -1.0, 0.0);
-        let n = Tuple::vector(std::f64::consts::FRAC_1_SQRT_2, std::f64::consts::FRAC_1_SQRT_2, 0.0);
+        let n = Tuple::vector(
+            std::f64::consts::FRAC_1_SQRT_2,
+            std::f64::consts::FRAC_1_SQRT_2,
+            0.0,
+        );
         let r = v.reflect(&n);
         assert!(r.is_equal(&Tuple::vector(1.0, 0.0, 0.0)));
     }

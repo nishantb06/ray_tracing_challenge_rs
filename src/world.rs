@@ -272,10 +272,7 @@ mod tests {
 
     #[test]
     fn the_hit_should_offset_the_point() {
-        let r = Ray::new(
-            Tuple::point(0.0, 0.0, -5.0),
-            Tuple::vector(0.0, 0.0, 1.0),
-        );
+        let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
 
         let mut shape = Sphere::new();
         shape.set_transform(translation(0.0, 0.0, 1.0));
