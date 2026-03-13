@@ -102,15 +102,14 @@ impl Matrix {
         let n = self.rows;
         let mut aug = self.augment_to_side(&Matrix::identity(n));
     
-        // Interchange rows so larger pivot values come first
-        for i in (1..n).rev() {
-            if aug.data[i - 1][0] < aug.data[i][0] {
-                aug.data.swap(i - 1, i);
-            }
-        }
-    
-        // Eliminate to get identity on the left side
+        // Eliminate to get identity on the left side (with partial pivoting)
         for i in 0..n {
+            // Find the row with the largest absolute value in column i
+            let max_row = (i..n)
+                .max_by(|&a, &b| aug.data[a][i].abs().partial_cmp(&aug.data[b][i].abs()).unwrap())
+                .unwrap();
+            aug.data.swap(i, max_row);
+
             for j in 0..n {
                 if j != i {
                     let multiplier = aug.data[j][i] / aug.data[i][i];
