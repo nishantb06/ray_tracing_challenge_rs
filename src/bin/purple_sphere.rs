@@ -1,11 +1,10 @@
 use ray_tracing_challenge_rs::canvas::{Canvas, Color};
-use ray_tracing_challenge_rs::tuple::Tuple;
-use ray_tracing_challenge_rs::sphere::Sphere;
-use ray_tracing_challenge_rs::ray::Ray;
 use ray_tracing_challenge_rs::light::PointLight;
 use ray_tracing_challenge_rs::material::lighting;
+use ray_tracing_challenge_rs::ray::Ray;
+use ray_tracing_challenge_rs::sphere::Sphere;
 use ray_tracing_challenge_rs::transformation::scaling;
-
+use ray_tracing_challenge_rs::tuple::Tuple;
 
 fn main() {
     let ray_origin = Tuple::point(0.0, 0.0, -5.0);
@@ -30,10 +29,7 @@ fn main() {
     // shape.set_transform(shearing(1.0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
     // shape.set_transform(translation(1.0, 0.5, 0.0));
-    let light = PointLight::new(
-        Tuple::point(-10.0, 10.0, -10.0),
-        Color::new(1.0, 1.0, 1.0),
-    );
+    let light = PointLight::new(Tuple::point(-10.0, 10.0, -10.0), Color::new(1.0, 1.0, 1.0));
 
     // let t = &translation(0.5, 0.0, 0.0) * &(&scaling(0.5, 1.0, 1.0) * &rotation_z(0.8));
     // shape.set_transform(t);
