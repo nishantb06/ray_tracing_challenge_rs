@@ -61,9 +61,9 @@ pub fn shearing(xy: f64, xz: f64, yx: f64, yz: f64, zx: f64, zy: f64) -> Matrix 
     m
 }
 
-// specify where you want the eye to be in the scene (the from parameter), 
-// the point in the scene at which you want to look (the to parameter), 
-// and a vector indicating which direction is up. 
+// specify where you want the eye to be in the scene (the from parameter),
+// the point in the scene at which you want to look (the to parameter),
+// and a vector indicating which direction is up.
 // The function then returns to you the corresponding transformation matrix
 #[allow(dead_code)]
 pub fn view_transform(from: &Tuple, to: &Tuple, up: &Tuple) -> Matrix {
@@ -71,12 +71,14 @@ pub fn view_transform(from: &Tuple, to: &Tuple, up: &Tuple) -> Matrix {
     let upn = up.normalize();
     let left = forward.cross(&upn);
     let true_up = left.cross(&forward);
-    let orientation = Matrix::new_with_data(4, 4, vec![
-         left.x,     left.y,     left.z,    0.0,
-         true_up.x,  true_up.y,  true_up.z, 0.0,
-        -forward.x, -forward.y, -forward.z, 0.0,
-         0.0,        0.0,        0.0,        1.0,
-    ]);
+    let orientation = Matrix::new_with_data(
+        4,
+        4,
+        vec![
+            left.x, left.y, left.z, 0.0, true_up.x, true_up.y, true_up.z, 0.0, -forward.x,
+            -forward.y, -forward.z, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ],
+    );
     &orientation * &translation(-from.x, -from.y, -from.z)
 }
 
@@ -183,35 +185,35 @@ mod tests {
         let p = Tuple::point(2.0, 3.0, 4.0);
         assert!(&transform * &p == Tuple::point(5.0, 3.0, 4.0));
     }
-    
+
     #[test]
     fn shearing_moves_x_in_proportion_to_z() {
         let transform = shearing(0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
         let p = Tuple::point(2.0, 3.0, 4.0);
         assert!(&transform * &p == Tuple::point(6.0, 3.0, 4.0));
     }
-    
+
     #[test]
     fn shearing_moves_y_in_proportion_to_x() {
         let transform = shearing(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
         let p = Tuple::point(2.0, 3.0, 4.0);
         assert!(&transform * &p == Tuple::point(2.0, 5.0, 4.0));
     }
-    
+
     #[test]
     fn shearing_moves_y_in_proportion_to_z() {
         let transform = shearing(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let p = Tuple::point(2.0, 3.0, 4.0);
         assert!(&transform * &p == Tuple::point(2.0, 7.0, 4.0));
     }
-    
+
     #[test]
     fn shearing_moves_z_in_proportion_to_x() {
         let transform = shearing(0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
         let p = Tuple::point(2.0, 3.0, 4.0);
         assert!(&transform * &p == Tuple::point(2.0, 3.0, 6.0));
     }
-    
+
     #[test]
     fn shearing_moves_z_in_proportion_to_y() {
         let transform = shearing(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
@@ -225,24 +227,24 @@ mod tests {
         let a = rotation_x(std::f64::consts::FRAC_PI_2);
         let b = scaling(5.0, 5.0, 5.0);
         let c = translation(10.0, 5.0, 7.0);
-    
+
         let p2 = &a * &p;
         assert!(p2.is_equal(&Tuple::point(1.0, -1.0, 0.0)));
-    
+
         let p3 = &b * &p2;
         assert!(p3.is_equal(&Tuple::point(5.0, -5.0, 0.0)));
-    
+
         let p4 = &c * &p3;
         assert!(p4.is_equal(&Tuple::point(15.0, 0.0, 7.0)));
     }
-    
+
     #[test]
     fn chained_transformations_applied_in_reverse_order() {
         let p = Tuple::point(1.0, 0.0, 1.0);
         let a = rotation_x(std::f64::consts::FRAC_PI_2);
         let b = scaling(5.0, 5.0, 5.0);
         let c = translation(10.0, 5.0, 7.0);
-    
+
         let t = &(&c * &b) * &a;
         assert!((&t * &p).is_equal(&Tuple::point(15.0, 0.0, 7.0)));
     }
@@ -250,8 +252,8 @@ mod tests {
     #[test]
     fn view_transform_default_orientation() {
         let from = Tuple::point(0.0, 0.0, 0.0);
-        let to   = Tuple::point(0.0, 0.0, -1.0);
-        let up   = Tuple::vector(0.0, 1.0, 0.0);
+        let to = Tuple::point(0.0, 0.0, -1.0);
+        let up = Tuple::vector(0.0, 1.0, 0.0);
         let t = view_transform(&from, &to, &up);
         assert_eq!(t, Matrix::identity(4));
     }
@@ -259,8 +261,8 @@ mod tests {
     #[test]
     fn view_transform_looking_in_positive_z() {
         let from = Tuple::point(0.0, 0.0, 0.0);
-        let to   = Tuple::point(0.0, 0.0, 1.0);
-        let up   = Tuple::vector(0.0, 1.0, 0.0);
+        let to = Tuple::point(0.0, 0.0, 1.0);
+        let up = Tuple::vector(0.0, 1.0, 0.0);
         let t = view_transform(&from, &to, &up);
         assert_eq!(t, scaling(-1.0, 1.0, -1.0));
     }
@@ -268,8 +270,8 @@ mod tests {
     #[test]
     fn view_transform_moves_the_world() {
         let from = Tuple::point(0.0, 0.0, 8.0);
-        let to   = Tuple::point(0.0, 0.0, 0.0);
-        let up   = Tuple::vector(0.0, 1.0, 0.0);
+        let to = Tuple::point(0.0, 0.0, 0.0);
+        let up = Tuple::vector(0.0, 1.0, 0.0);
         let t = view_transform(&from, &to, &up);
         assert_eq!(t, translation(0.0, 0.0, -8.0));
     }
@@ -277,15 +279,17 @@ mod tests {
     #[test]
     fn view_transform_arbitrary() {
         let from = Tuple::point(1.0, 3.0, 2.0);
-        let to   = Tuple::point(4.0, -2.0, 8.0);
-        let up   = Tuple::vector(1.0, 1.0, 0.0);
+        let to = Tuple::point(4.0, -2.0, 8.0);
+        let up = Tuple::vector(1.0, 1.0, 0.0);
         let t = view_transform(&from, &to, &up);
-        let expected = Matrix::new_with_data(4, 4, vec![
-            -0.50709,  0.50709,  0.67612, -2.36643,
-             0.76772,  0.60609,  0.12122, -2.82843,
-            -0.35857,  0.59761, -0.71714,  0.00000,
-             0.00000,  0.00000,  0.00000,  1.00000,
-        ]);
+        let expected = Matrix::new_with_data(
+            4,
+            4,
+            vec![
+                -0.50709, 0.50709, 0.67612, -2.36643, 0.76772, 0.60609, 0.12122, -2.82843,
+                -0.35857, 0.59761, -0.71714, 0.00000, 0.00000, 0.00000, 0.00000, 1.00000,
+            ],
+        );
         assert_eq!(t, expected);
     }
 }
