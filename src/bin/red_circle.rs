@@ -1,7 +1,8 @@
 use ray_tracing_challenge_rs::canvas::{Canvas, Color};
-use ray_tracing_challenge_rs::tuple::Tuple;
-use ray_tracing_challenge_rs::sphere::Sphere;
 use ray_tracing_challenge_rs::ray::Ray;
+use ray_tracing_challenge_rs::shape::Shape;
+use ray_tracing_challenge_rs::sphere::Sphere;
+use ray_tracing_challenge_rs::tuple::Tuple;
 
 fn main() {
     let ray_origin = Tuple::point(0.0, 0.0, -5.0);

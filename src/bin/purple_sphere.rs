@@ -2,6 +2,7 @@ use ray_tracing_challenge_rs::canvas::{Canvas, Color};
 use ray_tracing_challenge_rs::light::PointLight;
 use ray_tracing_challenge_rs::material::lighting;
 use ray_tracing_challenge_rs::ray::Ray;
+use ray_tracing_challenge_rs::shape::Shape;
 use ray_tracing_challenge_rs::sphere::Sphere;
 use ray_tracing_challenge_rs::transformation::scaling;
 use ray_tracing_challenge_rs::tuple::Tuple;
@@ -18,7 +19,7 @@ fn main() {
     let mut canvas = Canvas::new(canvas_pixels as usize, canvas_pixels as usize);
 
     let mut shape = Sphere::new();
-    shape.material.color = Color::new(1.0, 0.2, 1.0);
+    shape.data.material.color = Color::new(1.0, 0.2, 1.0);
     shape.set_transform(scaling(0.5, 1.0, 1.0));
     // // ellipse wide and flat
     // shape.set_transform(scaling(1.0, 0.5, 1.0));
@@ -48,7 +49,7 @@ fn main() {
                 let point = r.position(hit.t);
                 let normal = hit.object.normal_at(&point);
                 let eye = -&r.direction;
-                let color = lighting(&hit.object.material, &light, &point, &eye, &normal, false);
+                let color = lighting(hit.object.material(), &light, &point, &eye, &normal, false);
                 canvas.write_pixel(x, y, color);
             }
         }
