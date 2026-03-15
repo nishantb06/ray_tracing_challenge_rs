@@ -2,6 +2,7 @@ use crate::ray::Ray;
 use crate::sphere::Sphere;
 use crate::tuple::Tuple;
 use crate::utils::EPSILON;
+use crate::shape::Shape;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -81,7 +82,7 @@ mod tests {
         let s = Sphere::new();
         let i = Intersection::new(3.5, &s);
         assert!(crate::utils::equal(i.t, 3.5));
-        assert_eq!(i.object.id, s.id);
+        assert_eq!(i.object.data.id, s.data.id);
     }
 
     #[test]
@@ -144,7 +145,7 @@ mod tests {
         let i = Intersection::new(4.0, &shape);
         let comps = prepare_computations(&i, &r);
         assert!(crate::utils::equal(comps.t, i.t));
-        assert_eq!(comps.object.id, i.object.id);
+        assert_eq!(comps.object.data.id, i.object.data.id);
         assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, -1.0)));
         assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
         assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));

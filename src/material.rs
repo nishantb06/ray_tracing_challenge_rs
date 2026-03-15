@@ -2,7 +2,7 @@ use crate::canvas::Color;
 use crate::light::PointLight;
 use crate::tuple::Tuple;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub struct Material {
     pub color: Color,

@@ -6,6 +6,7 @@ use crate::ray::Ray;
 use crate::sphere::Sphere;
 use crate::transformation::scaling;
 use crate::tuple::Tuple;
+use crate::shape::Shape;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -27,9 +28,9 @@ impl World {
         let light = PointLight::new(Tuple::point(-10.0, 10.0, -10.0), Color::new(1.0, 1.0, 1.0));
 
         let mut s1 = Sphere::new();
-        s1.material.color = Color::new(0.8, 1.0, 0.6);
-        s1.material.diffuse = 0.7;
-        s1.material.specular = 0.2;
+        s1.data.material.color = Color::new(0.8, 1.0, 0.6);
+        s1.data.material.diffuse = 0.7;
+        s1.data.material.specular = 0.2;
 
         let mut s2 = Sphere::new();
         s2.set_transform(scaling(0.5, 0.5, 0.5));
@@ -44,12 +45,12 @@ impl World {
     // (compared by value, not by ID, since each Sphere::new() generates a unique ID
     pub fn contains(&self, sphere: &Sphere) -> bool {
         self.objects.iter().any(|o| {
-            o.material.color.is_equal(&sphere.material.color)
-                && crate::utils::equal(o.material.ambient, sphere.material.ambient)
-                && crate::utils::equal(o.material.diffuse, sphere.material.diffuse)
-                && crate::utils::equal(o.material.specular, sphere.material.specular)
-                && crate::utils::equal(o.material.shininess, sphere.material.shininess)
-                && o.transform == sphere.transform
+            o.data.material.color.is_equal(&sphere.data.material.color)
+                && crate::utils::equal(o.data.material.ambient, sphere.data.material.ambient)
+                && crate::utils::equal(o.data.material.diffuse, sphere.data.material.diffuse)
+                && crate::utils::equal(o.data.material.specular, sphere.data.material.specular)
+                && crate::utils::equal(o.data.material.shininess, sphere.data.material.shininess)
+                && o.data.transform == sphere.data.transform
         })
     }
 
@@ -88,7 +89,7 @@ pub fn shade_hit(world: &World, comps: &Computations) -> Color {
         .iter()
         .fold(Color::new(0.0, 0.0, 0.0), |acc, light| {
             let c = lighting(
-                &comps.object.material,
+                &comps.object.data.material,
                 light,
                 &comps.point,
                 &comps.eye_vector,
@@ -135,9 +136,9 @@ mod tests {
         let light = PointLight::new(Tuple::point(-10.0, 10.0, -10.0), Color::new(1.0, 1.0, 1.0));
 
         let mut s1 = Sphere::new();
-        s1.material.color = Color::new(0.8, 1.0, 0.6);
-        s1.material.diffuse = 0.7;
-        s1.material.specular = 0.2;
+        s1.data.material.color = Color::new(0.8, 1.0, 0.6);
+        s1.data.material.diffuse = 0.7;
+        s1.data.material.specular = 0.2;
 
         let mut s2 = Sphere::new();
         s2.set_transform(scaling(0.5, 0.5, 0.5));
@@ -208,9 +209,9 @@ mod tests {
     #[test]
     fn the_color_with_an_intersection_behind_the_ray() {
         let mut w = World::default_world();
-        w.objects[0].material.ambient = 1.0;
-        w.objects[1].material.ambient = 1.0;
-        let inner_color = w.objects[1].material.color.clone();
+        w.objects[0].data.material.ambient = 1.0;
+        w.objects[1].data.material.ambient = 1.0;
+        let inner_color = w.objects[1].data.material.color.clone();
         let r = Ray::new(Tuple::point(0.0, 0.0, 0.75), Tuple::vector(0.0, 0.0, -1.0));
         let c = color_at(&w, &r);
         assert!(c.is_equal(&inner_color));

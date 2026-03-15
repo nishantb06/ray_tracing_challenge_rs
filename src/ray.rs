@@ -3,7 +3,7 @@ use crate::utils::equal;
 use crate::matrix::Matrix;
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 #[allow(dead_code)]
 pub struct Ray {
     pub origin: Tuple,
