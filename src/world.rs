@@ -89,7 +89,7 @@ pub fn shade_hit(world: &World, comps: &Computations) -> Color {
         .iter()
         .fold(Color::new(0.0, 0.0, 0.0), |acc, light| {
             let c = lighting(
-                &comps.object.data.material,
+                comps.object.material(),
                 light,
                 &comps.point,
                 &comps.eye_vector,

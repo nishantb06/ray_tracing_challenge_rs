@@ -1,14 +1,22 @@
+use std::fmt;
 use crate::ray::Ray;
-use crate::sphere::Sphere;
 use crate::tuple::Tuple;
 use crate::utils::EPSILON;
 use crate::shape::Shape;
 
-#[derive(Debug)]
 #[allow(dead_code)]
 pub struct Intersection<'a> {
     pub t: f64,
-    pub object: &'a Sphere,
+    pub object: &'a dyn Shape,
+}
+
+impl fmt::Debug for Intersection<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Intersection")
+            .field("t", &self.t)
+            .field("object", &format!("Shape#{}", self.object.id()))
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -19,14 +27,14 @@ pub struct Intersections<'a> {
 
 #[allow(dead_code)]
 impl<'a> Intersection<'a> {
-    pub fn new(t: f64, object: &'a Sphere) -> Self {
+    pub fn new(t: f64, object: &'a dyn Shape) -> Self {
         Intersection { t, object }
     }
 }
 
 pub struct Computations<'a> {
     pub t: f64,
-    pub object: &'a Sphere,
+    pub object: &'a dyn Shape,
     pub point: Tuple,
     pub eye_vector: Tuple,
     pub normal_vector: Tuple,
@@ -76,13 +84,14 @@ impl<'a> Intersections<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sphere::Sphere;
 
     #[test]
     fn an_intersection_encapsulates_t_and_object() {
         let s = Sphere::new();
         let i = Intersection::new(3.5, &s);
         assert!(crate::utils::equal(i.t, 3.5));
-        assert_eq!(i.object.data.id, s.data.id);
+        assert_eq!(i.object.id(), s.data.id);
     }
 
     #[test]
@@ -145,7 +154,7 @@ mod tests {
         let i = Intersection::new(4.0, &shape);
         let comps = prepare_computations(&i, &r);
         assert!(crate::utils::equal(comps.t, i.t));
-        assert_eq!(comps.object.data.id, i.object.data.id);
+        assert_eq!(comps.object.id(), i.object.id());
         assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, -1.0)));
         assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
         assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));

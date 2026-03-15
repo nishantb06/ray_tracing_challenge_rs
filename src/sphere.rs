@@ -132,8 +132,8 @@ mod tests {
         let s = Sphere::new();
         let xs = s.local_intersect(&r);
         assert_eq!(xs.count(), 2);
-        assert_eq!(xs.data[0].object.data.id, s.data.id);
-        assert_eq!(xs.data[1].object.data.id, s.data.id);
+        assert_eq!(xs.data[0].object.id(), s.data.id);
+        assert_eq!(xs.data[1].object.id(), s.data.id);
     }
 
     // --- local_normal_at tests (point already in object space) ---
