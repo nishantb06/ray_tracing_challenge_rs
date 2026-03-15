@@ -1541,6 +1541,120 @@ The book is written with an interface-first mindset. Trying to "translate" the b
 
 To move forward with `dyn Shape`, you'll need to update your `Intersection` struct. Would you like to see how to define `Intersection` so it can hold a reference to any `dyn Shape` without running into lifetime errors?
 ---------------------
+This is exactly the `Intersection` holding `&Sphere` problem mentioned earlier. Update `intersection.rs` to use `&dyn Shape` everywhere:
+
+```rust
+use crate::ray::Ray;
+use crate::shape::Shape;
+use crate::tuple::Tuple;
+use crate::utils::EPSILON;
+
+#[derive(Debug)]
+pub struct Intersection<'a> {
+    pub t: f64,
+    pub object: &'a dyn Shape,
+}
+
+pub struct Computations<'a> {
+    pub t: f64,
+    pub object: &'a dyn Shape,
+    pub point: Tuple,
+    pub eye_vector: Tuple,
+    pub normal_vector: Tuple,
+    pub inside: bool,
+    pub over_point: Tuple,
+}
+
+impl<'a> Intersection<'a> {
+    pub fn new(t: f64, object: &'a dyn Shape) -> Self {
+        Intersection { t, object }
+    }
+}
+
+pub fn prepare_computations<'a>(
+    intersection: &'a Intersection<'a>,
+    ray: &Ray,
+) -> Computations<'a> {
+    let point = ray.position(intersection.t);
+    let mut normal_v = intersection.object.normal_at(&point);
+    let eye_v = -&(ray.direction);
+    let mut inside = false;
+    if normal_v.dot(&eye_v) < 0.0 {
+        inside = true;
+        normal_v = -&normal_v;
+    }
+    let over_point = &point + &(&normal_v * EPSILON);
+    Computations {
+        t: intersection.t,
+        object: intersection.object,
+        point,
+        eye_vector: eye_v,
+        normal_vector: normal_v,
+        inside,
+        over_point,
+    }
+}
+
+#[derive(Debug)]
+pub struct Intersections<'a> {
+    pub data: Vec<Intersection<'a>>,
+}
+
+impl<'a> Intersections<'a> {
+    pub fn new(mut items: Vec<Intersection<'a>>) -> Self {
+        items.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
+        Intersections { data: items }
+    }
+
+    pub fn count(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn hit(&self) -> Option<&Intersection<'a>> {
+        self.data.iter().find(|i| i.t >= 0.0)
+    }
+}
+```
+
+Then anywhere you were comparing object ids directly via `.data.id`, switch to the trait method:
+
+```rust
+// in sphere.rs tests
+assert_eq!(xs.data[0].object.id(), s.data.id);
+
+// in plane.rs tests
+assert_eq!(xs.data[0].object.id(), p.data.id);
+
+// in intersection.rs tests
+assert_eq!(i.object.id(), s.data.id);
+assert_eq!(comps.object.id(), i.object.id());
+```
+
+The reason `.data.id` is no longer reachable through `&dyn Shape` is that `dyn Shape` only exposes what's declared in the trait — the concrete struct's fields are erased. The `id()` trait method is exactly the bridge for this.
+
+
+All 144 library tests pass. Summary of what changed:
+
+**Fix:** The mismatch happened because `Intersection` and `Computations` were fixed to `&Sphere`, so `Plane::local_intersect` could not store `&self` (a `&Plane`) in an `Intersection`.
+
+**Changes made:**
+
+1. **`src/intersection.rs`**  
+   - `Intersection` and `Computations` now store `&'a dyn Shape` instead of `&'a Sphere`.  
+   - `Intersection::new` takes `object: &'a dyn Shape`.  
+   - Implemented `Debug` for `Intersection` manually (with the object printed as `Shape#id`) because `dyn Shape` doesn’t implement `Debug`.  
+   - Replaced uses of `.object.data.id` / `.object.data.material` with `.object.id()` and `.object.material()`.
+
+2. **`src/plane.rs`**  
+   - Tests now use `xs.data[0].object.id()` instead of `xs.data[0].object.data.id`.
+
+3. **`src/sphere.rs`**  
+   - Tests now use `.object.id()` instead of `.object.data.id`.
+
+4. **`src/world.rs`**  
+   - `shade_hit` now uses `comps.object.material()` instead of `comps.object.data.material`.
+
+**Explanation:** The intersection types were tied to `Sphere`, so only sphere references were allowed. Switching to `&dyn Shape` lets any type implementing `Shape` (including `Plane`) be stored in an intersection. `Plane`’s `Intersection::new(t, self)` is then valid because `&Plane` coerces to `&dyn Shape`.
 ---------------------
 
 ---------------------

@@ -4,6 +4,7 @@ use crate::matrix::Matrix;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::tuple::Tuple;
+use std::fmt::Debug;
 
 static NEXT_SHAPE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -32,7 +33,8 @@ impl ShapeData {
     }
 }
 
-pub trait Shape {
+
+pub trait Shape: Debug {
     fn shape_data(&self) -> &ShapeData;
     fn shape_data_mut(&mut self) -> &mut ShapeData;
 
@@ -68,6 +70,7 @@ pub mod test_support {
     use super::*;
     use std::cell::RefCell;
 
+    #[derive(Debug)]
     pub struct TestShape {
         pub data: ShapeData,
         pub saved_ray: RefCell<Option<Ray>>,
