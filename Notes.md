@@ -919,12 +919,627 @@ So the two scenarios drove it:
 It's a valid design. The only friction is at call sites like `shade_hit` where you have to unwrap it, but that's a small cost for accurately representing the "world with no light" state.
 ---------------------
 ---------------------
+Great context. Here's how I'd approach the Shape refactor in Rust, keeping the book's intent and your codebase in mind.
+
+The core tension in Rust is that the book uses OOP inheritance, which Rust doesn't have. You have three realistic options, each with different tradeoffs:**My recommendation: Option A — Trait + ShapeData struct.** Here's the full picture:
+
+---
+
+## The approach
+
+Define a `ShapeData` struct holding the common fields (`transform`, `material`, `id`), and a `Shape` trait with two methods the concrete shape must implement: `local_intersect` and `local_normal_at`. The `Shape` trait also has default implementations for the world-space `intersect` and `normal_at` that do the object-space transform around the local methods — exactly how the book models it.
+
+```rust
+// shape.rs
+pub struct ShapeData {
+    pub id: u64,
+    pub transform: Matrix,
+    pub material: Material,
+    pub transform_inverse: Matrix,  // cache this!
+}
+
+impl ShapeData {
+    pub fn new() -> Self {
+        let transform = Matrix::identity(4);
+        let transform_inverse = Matrix::identity(4);
+        ShapeData {
+            id: NEXT_SHAPE_ID.fetch_add(1, Ordering::Relaxed),
+            transform,
+            material: Material::new(),
+            transform_inverse,
+        }
+    }
+    pub fn set_transform(&mut self, t: Matrix) {
+        self.transform_inverse = t.inverse_gauss_jordan();
+        self.transform = t;
+    }
+}
+
+pub trait Shape {
+    fn shape_data(&self) -> &ShapeData;
+    fn shape_data_mut(&mut self) -> &mut ShapeData;
+
+    // Shapes implement these two in object space only:
+    fn local_intersect<'a>(&'a self, local_ray: &Ray) -> Intersections<'a>;
+    fn local_normal_at(&self, local_point: &Tuple) -> Tuple;
+
+    // These are free default impls — Sphere/Plane get them for free:
+    fn intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
+        let local_ray = ray.transform(&self.shape_data().transform_inverse);
+        self.local_intersect(&local_ray)
+    }
+
+    fn normal_at(&self, world_point: &Tuple) -> Tuple {
+        let sd = self.shape_data();
+        let local_point = &sd.transform_inverse * world_point;
+        let local_normal = self.local_normal_at(&local_point);
+        let mut world_normal = &sd.transform_inverse.transpose() * &local_normal;
+        world_normal.w = 0.0;
+        world_normal.normalize()
+    }
+
+    fn id(&self) -> u64 { self.shape_data().id }
+    fn transform(&self) -> &Matrix { &self.shape_data().transform }
+    fn material(&self) -> &Material { &self.shape_data().material }
+    fn set_transform(&mut self, t: Matrix) { self.shape_data_mut().set_transform(t); }
+}
+```
+
+Then `Sphere` becomes very slim:
+
+```rust
+pub struct Sphere {
+    pub data: ShapeData,
+    // no center/radius needed — unit sphere at origin in object space
+}
+
+impl Shape for Sphere {
+    fn shape_data(&self) -> &ShapeData { &self.data }
+    fn shape_data_mut(&mut self) -> &mut ShapeData { &mut self.data }
+
+    fn local_intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
+        // ray is already in object space — just the math, no transforms here
+        let sphere_to_ray = &ray.origin - &Tuple::point(0.0, 0.0, 0.0);
+        let a = ray.direction.dot(&ray.direction);
+        let b = 2.0 * ray.direction.dot(&sphere_to_ray);
+        let c = sphere_to_ray.dot(&sphere_to_ray) - 1.0;
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant < 0.0 { return Intersections::new(vec![]); }
+        let sqrt_d = discriminant.sqrt();
+        let t1 = (-b - sqrt_d) / (2.0 * a);
+        let t2 = (-b + sqrt_d) / (2.0 * a);
+        Intersections::new(vec![
+            Intersection::new(t1, self),
+            Intersection::new(t2, self),
+        ])
+    }
+
+    fn local_normal_at(&self, local_point: &Tuple) -> Tuple {
+        // Just the vector from origin — no transforms, normal_at handles those
+        local_point - &Tuple::point(0.0, 0.0, 0.0)
+    }
+}
+```
+
+And `Plane` is trivially short — one of the simplest shapes in the book:
+
+```rust
+pub struct Plane {
+    pub data: ShapeData,
+}
+
+impl Shape for Plane {
+    fn shape_data(&self) -> &ShapeData { &self.data }
+    fn shape_data_mut(&mut self) -> &mut ShapeData { &mut self.data }
+
+    fn local_intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
+        if ray.direction.y.abs() < EPSILON {
+            return Intersections::new(vec![]);
+        }
+        let t = -ray.origin.y / ray.direction.y;
+        Intersections::new(vec![Intersection::new(t, self)])
+    }
+
+    fn local_normal_at(&self, _: &Tuple) -> Tuple {
+        Tuple::vector(0.0, 1.0, 0.0)  // always flat in XZ
+    }
+}
+```
+
+---
+
+## What to do about `Intersection` and `Computations`
+
+Right now `Intersection<'a>` holds `&'a Sphere`. You'll want to change it to `&'a dyn Shape`. This works well and keeps lifetimes intact without requiring heap allocation:
+
+```rust
+pub struct Intersection<'a> {
+    pub t: f64,
+    pub object: &'a dyn Shape,
+}
+
+pub struct Computations<'a> {
+    pub t: f64,
+    pub object: &'a dyn Shape,
+    // ... rest unchanged
+}
+```
+
+`prepare_computations` then calls `intersection.object.normal_at(&point)` — works fine since `normal_at` is a trait method.
+
+---
+
+## The inverse cache is worth it
+
+One performance note: your current code calls `inverse_gauss_jordan()` on every ray-shape intersection and again on every `normal_at`. That's expensive. Caching `transform_inverse` in `ShapeData` (computed once when you call `set_transform`) pays off immediately, especially once you have scenes with hundreds of rays.
+
+---
+
+## Why not enum or `Box<dyn Shape>`?
+
+The enum approach requires touching a central file every time you add a shape — workable, but goes against how the book incrementally introduces shapes. `Box<dyn Shape>` is fine too and is closer to OOP, but requires heap allocation for every shape and complicates lifetimes in `Intersection`. The trait-with-reference approach keeps stack allocation and zero-cost dispatch for the common case where shapes are owned by a `World` struct and intersections borrow from them.
+---------------------
+---------------------
+You’re at the **exact point in the book where many Rust implementations become messy** if you try to mimic classical OOP too literally. The book is written assuming **class inheritance**, but Rust doesn’t have inheritance, so the clean solution is to **separate common data from shape-specific behavior**.
+
+If you design this right now, adding **planes, cubes, cylinders later becomes trivial**.
+
+Let’s walk through the **best architecture for Rust** that keeps:
+
+* high performance
+* minimal dynamic dispatch
+* close conceptual mapping to the book
+* simple implementation
+
+---
+
+# 1. Identify the Real Shared Structure
+
+From the book, all shapes share:
+
+Common **data**
+
+* transform
+* material
+* id
+
+Common **algorithms**
+
+* world → object ray transform
+* world → object point transform
+* normal transformation
+
+Shape-specific logic:
+
+* local intersection
+* local normal
+
+So the book’s design becomes this:
+
+```
+Shape
+ ├── transform
+ ├── material
+ ├── intersect()
+ ├── normal_at()
+ │
+ └── Sphere
+      ├── local_intersect()
+      └── local_normal_at()
+```
+
+Rust translation:
+
+```
+Shape struct (shared data)
+Shape trait (shared behavior)
+Sphere struct (specific geometry)
+```
+
+---
+
+# 2. The Correct Rust Design
+
+## Shared data container
+
+```rust
+pub struct ShapeData {
+    pub id: u64,
+    pub transform: Matrix,
+    pub material: Material,
+}
+```
+
+Default:
+
+```
+transform = identity
+material = default phong
+```
+
+---
+
+## Shape trait
+
+This represents **behavior of any renderable shape**.
+
+```rust
+pub trait Shape {
+    fn data(&self) -> &ShapeData;
+    fn data_mut(&mut self) -> &mut ShapeData;
+
+    fn local_intersect(&self, ray: &Ray) -> Intersections;
+    fn local_normal_at(&self, point: &Tuple) -> Tuple;
+}
+```
+
+Important:
+
+These two methods are the **only shape-specific ones**.
+
+```
+local_intersect
+local_normal_at
+```
+
+Everything else is **shared logic**.
+
+---
+
+# 3. Default Implementations (Very Important)
+
+Now we implement the book’s shared logic **once**.
+
+```rust
+pub trait Shape {
+
+    fn data(&self) -> &ShapeData;
+    fn data_mut(&mut self) -> &mut ShapeData;
+
+    fn local_intersect(&self, ray: &Ray) -> Intersections;
+    fn local_normal_at(&self, point: &Tuple) -> Tuple;
+
+    fn intersect(&self, ray: &Ray) -> Intersections {
+        let inv = self.data().transform.inverse();
+        let local_ray = ray.transform(&inv);
+        self.local_intersect(&local_ray)
+    }
+
+    fn normal_at(&self, world_point: &Tuple) -> Tuple {
+        let inv = self.data().transform.inverse();
+
+        let object_point = &inv * world_point;
+
+        let object_normal = self.local_normal_at(&object_point);
+
+        let mut world_normal = &inv.transpose() * &object_normal;
+
+        world_normal.w = 0.0;
+
+        world_normal.normalize()
+    }
+}
+```
+
+This is the **exact refactor the book intends**, just implemented with Rust traits instead of inheritance.
+
+---
+
+# 4. Sphere Implementation
+
+Now sphere becomes **very small and clean**.
+
+```rust
+pub struct Sphere {
+    pub data: ShapeData
+}
+```
+
+Constructor:
+
+```
+impl Sphere {
+    pub fn new() -> Self {
+        Sphere {
+            data: ShapeData::new()
+        }
+    }
+}
+```
+
+---
+
+### Implement the trait
+
+```rust
+impl Shape for Sphere {
+
+    fn data(&self) -> &ShapeData {
+        &self.data
+    }
+
+    fn data_mut(&mut self) -> &mut ShapeData {
+        &mut self.data
+    }
+
+    fn local_intersect(&self, ray: &Ray) -> Intersections {
+
+        let sphere_to_ray = &ray.origin - &Tuple::point(0.0,0.0,0.0);
+
+        let a = ray.direction.dot(&ray.direction);
+        let b = 2.0 * ray.direction.dot(&sphere_to_ray);
+        let c = sphere_to_ray.dot(&sphere_to_ray) - 1.0;
+
+        let discriminant = b*b - 4.0*a*c;
+
+        if discriminant < 0.0 {
+            return Intersections::new(vec![]);
+        }
+
+        let sqrt = discriminant.sqrt();
+
+        let t1 = (-b - sqrt) / (2.0*a);
+        let t2 = (-b + sqrt) / (2.0*a);
+
+        Intersections::new(vec![
+            Intersection::new(t1, self),
+            Intersection::new(t2, self),
+        ])
+    }
+
+    fn local_normal_at(&self, point: &Tuple) -> Tuple {
+        point - Tuple::point(0.0,0.0,0.0)
+    }
+}
+```
+
+Notice how **all transform logic disappeared** from Sphere.
+
+That’s the **goal of this chapter**.
+
+---
+
+# 5. Fixing the Intersection Type
+
+Your current intersection:
+
+```
+pub object: &'a Sphere
+```
+
+This will **break once you add Plane**.
+
+Instead:
+
+```
+pub object: &'a dyn Shape
+```
+
+```
+pub struct Intersection<'a> {
+    pub t: f64,
+    pub object: &'a dyn Shape,
+}
+```
+
+This is necessary for polymorphism.
+
+---
+
+# 6. World Storage (Future Chapters)
+
+Later the world will store shapes like this:
+
+```
+Vec<Box<dyn Shape>>
+```
+
+Example:
+
+```
+let world: Vec<Box<dyn Shape>> = vec![
+    Box::new(Sphere::new()),
+    Box::new(Plane::new())
+];
+```
+
+---
+
+# 7. Performance Discussion
+
+You asked about performance — good instinct.
+
+Three options exist:
+
+| Approach                    | Performance        | Difficulty |
+| --------------------------- | ------------------ | ---------- |
+| Trait objects (`dyn Shape`) | Slight vtable cost | Easy       |
+| Enum shapes                 | Zero dispatch      | Medium     |
+| Generic scene               | Hard               | Best       |
+
+For a ray tracer:
+
+**trait objects are completely fine**.
+
+Intersection math dominates cost, not the vtable.
+
+---
+
+# 8. One Performance Improvement You Should Add
+
+Currently you recompute inverse every time:
+
+```
+let inv = self.transform.inverse()
+```
+
+Instead store:
+
+```
+pub struct ShapeData {
+    transform: Matrix,
+    inverse: Matrix,
+}
+```
+
+Update both in `set_transform`.
+
+This removes **tons of matrix inversions per pixel**.
+
+---
+
+# 9. What Your Final Structure Should Look Like
+
+```
+geometry/
+    shape.rs        (trait + shared logic)
+    shape_data.rs   (transform + material)
+
+shapes/
+    sphere.rs
+    plane.rs
+    cube.rs
+
+intersection.rs
+world.rs
+```
+
+---
+
+# 10. How Planes Will Look After This Refactor
+
+Plane becomes **extremely easy**.
+
+```
+impl Shape for Plane {
+
+    fn local_intersect(&self, ray: &Ray) -> Intersections {
+        if ray.direction.y.abs() < EPSILON {
+            return Intersections::new(vec![]);
+        }
+
+        let t = -ray.origin.y / ray.direction.y;
+
+        Intersections::new(vec![Intersection::new(t, self)])
+    }
+
+    fn local_normal_at(&self, _point: &Tuple) -> Tuple {
+        Tuple::vector(0.0, 1.0, 0.0)
+    }
+}
+```
+
+That's it.
+
+No transform code. No world logic.
+
+---
+
+# 11. Key Insight (Important)
+
+The real architecture is:
+
+```
+intersect(ray)
+    ↓
+convert ray to object space
+    ↓
+local_intersect(ray)
+```
+
+```
+normal_at(point)
+    ↓
+convert point to object space
+    ↓
+local_normal_at(point)
+    ↓
+convert normal to world space
+```
+
+That pattern holds for **every shape in the book**.
+
+---
+
+# If you want, I can also show you:
+
+**A very clean Rust architecture used by high-performance ray tracers implementing this exact book**:
+
+* zero lifetime headaches
+* no borrow checker fights
+* faster intersection handling
+* simpler `World` implementation
+
+It’s a **much cleaner design than most GitHub implementations of this book.**
 
 ---------------------
 ---------------------
----------------------
----------------------
+This is a fantastic foresight. You’ve hit on the exact architectural crossroads where most Rust ray-tracer implementations diverge.
 
+If you plan to follow the book to the end—specifically through **Groups** (Chapter 14) and **CSG** (Chapter 16)—the choice between Enums and Dynamic Dispatch becomes a trade-off between **performance** and **extensibility**.
+
+---
+
+## 1. Using Dynamic Dispatch (`dyn Shape`)
+
+The book's architecture is heavily influenced by Object-Oriented Programming (OO). `dyn Shape` mirrors this perfectly.
+
+* **Groups:** A Group is just a `Shape` that contains a `Vec<Box<dyn Shape>>`. Because everything is a trait object, the Group doesn't care if its children are Spheres, Planes, or other Groups.
+* **CSG:** A CSG node is a `Shape` that has a `left` and `right` child, both of which are `Box<dyn Shape>`.
+* **Pros:** Very easy to add new shapes (Cylinders, Cones) later without touching old code. It handles deep nesting (Groups within Groups) naturally.
+* **Cons:** You'll deal with a lot of lifetimes (`<'a>`) and `Box` pointers. Performance takes a slight hit due to "vtable" lookups and cache misses.
+
+---
+
+## 2. Using Enums (`enum Shape`)
+
+This is the "Data-Oriented" Rust way. You define one enum that contains every possible shape variant.
+
+```rust
+enum Shape {
+    Sphere(Sphere),
+    Plane(Plane),
+    Group(GroupData),
+    CSG(CSGData),
+}
+
+```
+
+* **Groups & CSG:** This gets tricky. Since a `Group` contains `Shapes`, and `Shape` is the enum, you end up with a recursive data structure. Rust requires you to `Box` the children anyway to give the enum a known size at compile time.
+* **Pros:** **Fast.** The compiler knows exactly how big a `Shape` is. It can optimize `match` statements better than virtual function calls.
+* **Cons:** Every time you add a new shape (like a Triangle), you have to update the `enum` and every `match` statement in your code. It can become a "centralized bottleneck."
+
+---
+
+## 3. The "CSG" Dealbreaker
+
+The book's implementation of CSG requires shapes to know about their "parent" to handle nested transformations and normal calculations correctly.
+
+* **With `dyn Shape`:** Implementing parent pointers is notoriously difficult in Rust because of ownership rules. You often end up needing `Weak` pointers or `RefCell`, which adds complexity.
+* **With Enums:** You might find it slightly easier to manage "IDs" or "Indices" to represent parents, but the recursive nature of CSG still pushes you toward pointers.
+
+---
+
+## The Verdict: Which should you choose?
+
+| If you value... | Choose... |
+| --- | --- |
+| **Faithfulness to the book** | `dyn Shape` (Dynamic Dispatch) |
+| **Pure execution speed** | `enum Shape` |
+| **Ease of adding new features** | `dyn Shape` |
+| **Idiomatic "Modern" Rust** | `enum Shape` |
+
+### My Recommendation
+
+For your **first** implementation of this book, stick with **Dynamic Dispatch (`dyn Shape`)**.
+
+The book is written with an interface-first mindset. Trying to "translate" the book’s logic into a large Enum-based architecture while *also* learning the math of CSG can be a recipe for frustration. The performance loss of `dyn` is negligible for a CPU-bound hobby project, and it allows you to focus on the math rather than fighting the Enum's exhaustiveness requirements.
+
+---
+
+### Your Next Step
+
+To move forward with `dyn Shape`, you'll need to update your `Intersection` struct. Would you like to see how to define `Intersection` so it can hold a reference to any `dyn Shape` without running into lifetime errors?
 ---------------------
 ---------------------
 
