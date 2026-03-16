@@ -65,7 +65,6 @@ pub trait Shape: Debug {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 pub mod test_support {
     use super::*;
     use std::cell::RefCell;

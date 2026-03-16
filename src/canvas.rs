@@ -37,6 +37,10 @@ impl Color {
     }
 }
 
+pub const WHITE: Color = Color { red: 1.0, green: 1.0, blue: 1.0 };
+pub const BLACK: Color = Color { red: 0.0, green: 0.0, blue: 0.0 };
+
+
 impl Add for &Color {
     type Output = Color;
     fn add(self, rhs: Self) -> Self::Output {

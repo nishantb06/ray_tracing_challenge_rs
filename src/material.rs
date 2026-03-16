@@ -1,6 +1,7 @@
-use crate::canvas::Color;
+use crate::canvas::{Color};
 use crate::light::PointLight;
 use crate::tuple::Tuple;
+use crate::pattern::StripePattern;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -10,6 +11,7 @@ pub struct Material {
     pub diffuse: f64,
     pub specular: f64,
     pub shininess: f64,
+    pub pattern: Option<StripePattern>,
 }
 
 #[allow(dead_code)]
@@ -21,6 +23,7 @@ impl Material {
             diffuse: 0.9,
             specular: 0.9,
             shininess: 200.0,
+            pattern: None,
         }
     }
 }
@@ -34,7 +37,13 @@ pub fn lighting(
     in_shadow: bool,
 ) -> Color {
     // combine the surface color with the light's color/intensity
-    let effective_color = &m.color * &light.intensity;
+    let effective_color = match &m.pattern {
+        Some(pattern) => {
+            let pattern_color = pattern.stripe_at(point.x, point.y, point.z);
+            &pattern_color * &light.intensity
+        }
+        None => &m.color * &light.intensity,
+    };
 
     // find the direction to the light source
     let mut light_v = &light.position - point;
@@ -73,6 +82,7 @@ pub fn lighting(
 mod tests {
     use super::*;
     use crate::utils::equal;
+    use crate::canvas::{BLACK,WHITE};
 
     #[test]
     fn the_default_material() {
@@ -157,5 +167,30 @@ mod tests {
         let in_shadow = true;
         let result = lighting(&m, &light, &position, &eyev, &normalv, in_shadow);
         assert!(result.is_equal(&Color::new(0.1, 0.1, 0.1)));
+    }
+
+    #[test]
+    fn lighting_with_a_pattern_applied() {
+        let m = Material {
+            color: Color::new(1.0, 1.0, 1.0),
+            ambient: 1.0,
+            diffuse: 0.0,
+            specular: 0.0,
+            shininess: 200.0,
+            pattern: Some(StripePattern::new(WHITE, BLACK)),
+        };
+
+        let eyev = Tuple::vector(0.0, 0.0, -1.0);
+        let normalv = Tuple::vector(0.0, 0.0, -1.0);
+        let light = PointLight::new(
+            Tuple::point(0.0, 0.0, -10.0),
+            Color::new(1.0, 1.0, 1.0),
+        );
+
+        let c1 = lighting(&m, &light, &Tuple::point(0.9, 0.0, 0.0), &eyev, &normalv, false);
+        let c2 = lighting(&m, &light, &Tuple::point(1.1, 0.0, 0.0), &eyev, &normalv, false);
+
+        assert!(c1.is_equal(&Color::new(1.0, 1.0, 1.0)));
+        assert!(c2.is_equal(&Color::new(0.0, 0.0, 0.0)));
     }
 }
