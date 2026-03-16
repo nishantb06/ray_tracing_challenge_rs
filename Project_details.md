@@ -195,3 +195,15 @@ The solution is to adjust the point just slightly in the direction of the normal
 3. Intersect the world with that ray.
 4. Check to see if there was a hit, and if so, whether t is less than distance. If
    so, the hit lies between the point and the light source, and the point is in shadow
+
+Because the point being passed to the stripe_at() function is in world space,
+the patterns completely ignore the transformations of the objects to which
+they are applied.
+This is unfortunate, because we expect a pattern to move when its object
+moves. If you make an object bigger or smaller, the pattern on it should get
+bigger or smaller. Rotating an object ought to rotate the pattern, too.
+Further, it makes sense to be able to transform the patterns themselves,
+independently of the object. Want your stripes closer together or farther apart?
+Scale them. Want to change how they are oriented on the object? Rotate them.
+What to change their phase? Translate them to shift them to one side or the
+other.

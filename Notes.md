@@ -1657,11 +1657,181 @@ All 144 library tests pass. Summary of what changed:
 **Explanation:** The intersection types were tied to `Sphere`, so only sphere references were allowed. Switching to `&dyn Shape` lets any type implementing `Shape` (including `Plane`) be stored in an intersection. `Plane`’s `Intersection::new(t, self)` is then valid because `&Plane` coerces to `&dyn Shape`.
 ---------------------
 
----------------------
----------------------
+Rust doesn’t have `null`. “Maybe missing” is expressed with **`Option<T>`** from the standard library.
+
+- **`Option<T>`** = either **`Some(value)`** (a `T` is present) or **`None`** (no value).
+- **`Result<T, E>`** = either **`Ok(value)`** (success) or **`Err(e)`** (error).
+
+For “pattern can be there or not”, use **`Option`**.
+
+---
+
+## 1. Make `pattern` optional
+
+Use `Option<StripePattern>` instead of `StripePattern`:
+
+```rust
+pub pattern: Option<StripePattern>,
+```
+
+---
+
+## 2. Default: no pattern
+
+In `Material::new()`, use `None` (Rust has no `null`):
+
+```rust
+pattern: None,
+```
+
+---
+
+## 3. Using the pattern (e.g. in `lighting`)
+
+You only use the pattern when it’s `Some`; when it’s `None`, you use the material’s solid `color`. For example:
+
+**With `match`:**
+```rust
+let effective_color = match &m.pattern {
+    Some(pattern) => {
+        let pattern_color = pattern.stripe_at(point.x, point.y, point.z);
+        &pattern_color * &light.intensity
+    }
+    None => &m.color * &light.intensity,
+};
+```
+
+**With `if let`:**
+```rust
+let effective_color = if let Some(ref pattern) = m.pattern {
+    let pattern_color = pattern.stripe_at(point.x, point.y, point.z);
+    &pattern_color * &light.intensity
+} else {
+    &m.color * &light.intensity
+};
+```
+
+**With `map` + `unwrap_or`:**
+```rust
+let effective_color = m.pattern
+    .as_ref()
+    .map(|p| p.stripe_at(point.x, point.y, point.z) * &light.intensity)
+    .unwrap_or_else(|| &m.color * &light.intensity);
+```
+
+Use whichever style fits the rest of your code.
+
+---
+
+## 4. Creating a material with a pattern
+
+When you do have a pattern:
+
+```rust
+// With pattern
+Material {
+    color: Color::new(1.0, 1.0, 1.0),
+    ambient: 0.1,
+    diffuse: 0.9,
+    specular: 0.9,
+    shininess: 200.0,
+    pattern: Some(StripePattern::new(Color::white(), Color::black())),
+}
+
+// Without pattern (or from Material::new())
+pattern: None,
+```
+
+---
+
+## Summary
+
+| Your intent     | In Rust              |
+|-----------------|----------------------|
+| “Can be null”   | `Option<StripePattern>` |
+| “No pattern”    | `None`               |
+| “Has a pattern” | `Some(stripe_pattern)` |
+
+So: change the field type to `Option<StripePattern>`, use `None` in `Material::new()`, and in `lighting` (and anywhere else that uses `m.pattern`) handle both `Some(...)` and `None` with `match`, `if let`, or `.map`/`.unwrap_or_else` as above.
 ---------------------
 ---------------------
 
+In `pattern.rs` you now have:
+
+```rust
+pub fn stripe_at_object<S: Shape + ?Sized>(
+    pattern: &StripePattern,
+    object: &S,
+    point: crate::tuple::Tuple,
+) -> Color { ... }
+```
+
+The `+ ?Sized` is there **because you call this function with a `&dyn Shape`**, not just with concrete `Shape` implementors like `Sphere`.
+
+### What’s going on
+
+- **`S: Shape`** by itself implies **`S: Sized`** (Rust implicitly adds `Sized` to generic type params unless you say otherwise).
+- That means the function would only accept **`&T` where `T: Shape + Sized`**, e.g. `&Sphere`, `&Plane`, etc.
+- But in `lighting` and `shade_hit` you use:
+
+```rust
+fn lighting(m: &Material, object: &dyn Shape, ...)
+
+StripePattern::stripe_at_object(pattern, object, point.clone());
+```
+
+Here `object` has type **`&dyn Shape`**. The `dyn Shape` trait object is **unsized** (compiler doesn’t know its size at compile time), so it **does not implement `Sized`**. That’s why the compiler gave you the E0277 error.
+
+### What `?Sized` does
+
+- **`S: Shape + ?Sized`** says:
+  - `S` must implement `Shape`.
+  - `S` is **allowed to be unsized** (i.e. doesn’t have to be `Sized`).
+- This lets `S` be:
+  - A concrete type like `Sphere` (`Sized`), or
+  - A trait object like `dyn Shape` (`!Sized`).
+
+Because of that, `stripe_at_object` can now accept both:
+
+```rust
+let s = Sphere::new();
+StripePattern::stripe_at_object(&pattern, &s, point);      // S = Sphere
+
+let obj: &dyn Shape = &s;
+StripePattern::stripe_at_object(&pattern, obj, point);     // S = dyn Shape
+```
+
+Without `+ ?Sized`, the second call (with `&dyn Shape`) wouldn’t compile.
+
+### Intuition
+
+- **`S: Shape`** → “S is a Shape and has a known size.”
+- **`S: Shape + ?Sized`** → “S is a Shape, and it might be a trait object or other unsized type; I’ll always work with it behind a reference (`&S`).”
+
+You need this specifically because your high-level APIs (`lighting`, `shade_hit`, `World` intersections) naturally work with **trait objects (`&dyn Shape`)**, not concrete types, and `stripe_at_object` is used in that context.
+---------------------
+---------------------
+
+Summary of changes:
+
+**1. `src/material.rs`**
+- **`lighting()`** now takes `object: &dyn Shape` as the second argument:  
+  `lighting(material, object, light, point, eyev, normalv, in_shadow)`.
+- When a pattern is present, it uses **`StripePattern::stripe_at_object(pattern, object, point.clone())`** instead of `pattern.stripe_at(...)` so object and pattern transforms are applied.
+- **Tests**: Each test builds a `Sphere::new()` and passes it as the second argument to `lighting()` (and the test module imports `crate::sphere::Sphere`).
+
+**2. `src/world.rs`**
+- **`shade_hit()`** passes the hit object into `lighting()`:  
+  `lighting(comps.object.material(), comps.object, light, ...)`.
+
+**3. `src/pattern.rs`**
+- **`stripe_at_object`** type bound updated to **`S: Shape + ?Sized`** so it can be called with `&dyn Shape` from `lighting()` and `shade_hit()`.
+
+**4. `src/bin/purple_sphere.rs`**
+- The direct `lighting(...)` call now includes the hit object:  
+  `lighting(hit.object.material(), hit.object, &light, ...)`.
+
+All 153 tests pass. Pattern lighting now uses world → object → pattern space via `stripe_at_object`, so object and pattern transforms are respected.
 ---------------------
 ---------------------
 

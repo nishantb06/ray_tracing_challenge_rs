@@ -8,7 +8,7 @@ use ray_tracing_challenge_rs::plane::Plane;
 use ray_tracing_challenge_rs::shape::Shape;
 use ray_tracing_challenge_rs::sphere::Sphere;
 use ray_tracing_challenge_rs::transformation::{
-    rotation_x, scaling, translation, view_transform,
+    rotation_x, rotation_y, scaling, translation, view_transform,
 };
 use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
@@ -18,20 +18,24 @@ use std::f64::consts::FRAC_PI_3;
 fn main() {
     let red = Color::new(1.0, 0.0, 0.0);
     let white = Color::new(1.0, 1.0, 1.0);
-    let stripe = StripePattern::new(red, white);
+    // Separate patterns so we can tilt only the spheres
+    let stripe_planes = StripePattern::new(red.clone(), white.clone());
+    let mut stripe_spheres = StripePattern::new(red, white);
+    // Tilt sphere stripes by 45 degrees around the Y axis
+    stripe_spheres.set_transform(rotation_y(std::f64::consts::FRAC_PI_4));
 
     // Floor plane
     let mut floor = Plane::new();
     floor.data.material.color = Color::new(1.0, 0.9, 0.9);
     floor.data.material.specular = 0.0;
-    floor.data.material.pattern = Some(stripe.clone());
+    floor.data.material.pattern = Some(stripe_planes.clone());
 
     // Back wall
     let mut wall = Plane::new();
     wall.set_transform(&translation(0.0, 0.0, 10.0) * &rotation_x(FRAC_PI_2));
     wall.data.material.color = Color::new(0.85, 0.85, 0.95);
     wall.data.material.specular = 0.0;
-    wall.data.material.pattern = Some(stripe.clone());
+    wall.data.material.pattern = Some(stripe_planes.clone());
 
     // Middle sphere
     let mut middle = Sphere::new();
@@ -40,7 +44,7 @@ fn main() {
     middle.data.material.color = Color::new(0.1, 1.0, 0.5);
     middle.data.material.diffuse = 0.7;
     middle.data.material.specular = 0.3;
-    middle.data.material.pattern = Some(stripe.clone());
+    middle.data.material.pattern = Some(stripe_spheres.clone());
 
     // Right sphere
     let mut right = Sphere::new();
@@ -49,7 +53,7 @@ fn main() {
     right.data.material.color = Color::new(0.5, 1.0, 0.1);
     right.data.material.diffuse = 0.7;
     right.data.material.specular = 0.3;
-    right.data.material.pattern = Some(stripe.clone());
+    right.data.material.pattern = Some(stripe_spheres.clone());
 
     // Left sphere
     let mut left = Sphere::new();
@@ -58,7 +62,7 @@ fn main() {
     left.data.material.color = Color::new(1.0, 0.8, 0.1);
     left.data.material.diffuse = 0.7;
     left.data.material.specular = 0.3;
-    left.data.material.pattern = Some(stripe);
+    left.data.material.pattern = Some(stripe_spheres);
 
     let mut world = World::new();
     world.add_shape(floor);

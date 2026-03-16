@@ -2,7 +2,7 @@ use crate::tuple::Tuple;
 use crate::utils::equal;
 use std::ops::Mul;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 #[allow(dead_code)]
 pub struct Matrix {
     pub rows: usize,

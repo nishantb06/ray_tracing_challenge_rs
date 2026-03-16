@@ -1,7 +1,8 @@
-use crate::canvas::{Color};
+use crate::canvas::Color;
 use crate::light::PointLight;
-use crate::tuple::Tuple;
 use crate::pattern::StripePattern;
+use crate::shape::Shape;
+use crate::tuple::Tuple;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -30,6 +31,7 @@ impl Material {
 
 pub fn lighting(
     m: &Material,
+    object: &dyn Shape,
     light: &PointLight,
     point: &Tuple,
     eye_vector: &Tuple,
@@ -39,7 +41,8 @@ pub fn lighting(
     // combine the surface color with the light's color/intensity
     let effective_color = match &m.pattern {
         Some(pattern) => {
-            let pattern_color = pattern.stripe_at(point.x, point.y, point.z);
+            let pattern_color =
+                StripePattern::stripe_at_object(pattern, object, point.clone());
             &pattern_color * &light.intensity
         }
         None => &m.color * &light.intensity,
@@ -81,8 +84,9 @@ pub fn lighting(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::canvas::{BLACK, WHITE};
+    use crate::sphere::Sphere;
     use crate::utils::equal;
-    use crate::canvas::{BLACK,WHITE};
 
     #[test]
     fn the_default_material() {
@@ -97,17 +101,19 @@ mod tests {
     #[test]
     fn lighting_with_eye_between_light_and_surface() {
         let m = Material::new();
+        let object = Sphere::new();
         let position = Tuple::point(0.0, 0.0, 0.0);
         let eyev = Tuple::vector(0.0, 0.0, -1.0);
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
         let light = PointLight::new(Tuple::point(0.0, 0.0, -10.0), Color::new(1.0, 1.0, 1.0));
-        let result = lighting(&m, &light, &position, &eyev, &normalv, false);
+        let result = lighting(&m, &object, &light, &position, &eyev, &normalv, false);
         assert!(result.is_equal(&Color::new(1.9, 1.9, 1.9)));
     }
 
     #[test]
     fn lighting_with_eye_between_light_and_surface_eye_offset_45() {
         let m = Material::new();
+        let object = Sphere::new();
         let position = Tuple::point(0.0, 0.0, 0.0);
         let eyev = Tuple::vector(
             0.0,
@@ -116,24 +122,26 @@ mod tests {
         );
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
         let light = PointLight::new(Tuple::point(0.0, 0.0, -10.0), Color::new(1.0, 1.0, 1.0));
-        let result = lighting(&m, &light, &position, &eyev, &normalv, false);
+        let result = lighting(&m, &object, &light, &position, &eyev, &normalv, false);
         assert!(result.is_equal(&Color::new(1.0, 1.0, 1.0)));
     }
 
     #[test]
     fn lighting_with_eye_opposite_surface_light_offset_45() {
         let m = Material::new();
+        let object = Sphere::new();
         let position = Tuple::point(0.0, 0.0, 0.0);
         let eyev = Tuple::vector(0.0, 0.0, -1.0);
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
         let light = PointLight::new(Tuple::point(0.0, 10.0, -10.0), Color::new(1.0, 1.0, 1.0));
-        let result = lighting(&m, &light, &position, &eyev, &normalv, false);
+        let result = lighting(&m, &object, &light, &position, &eyev, &normalv, false);
         assert!(result.is_equal(&Color::new(0.7364, 0.7364, 0.7364)));
     }
 
     #[test]
     fn lighting_with_eye_in_path_of_reflection_vector() {
         let m = Material::new();
+        let object = Sphere::new();
         let position = Tuple::point(0.0, 0.0, 0.0);
         let eyev = Tuple::vector(
             0.0,
@@ -142,30 +150,32 @@ mod tests {
         );
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
         let light = PointLight::new(Tuple::point(0.0, 10.0, -10.0), Color::new(1.0, 1.0, 1.0));
-        let result = lighting(&m, &light, &position, &eyev, &normalv, false);
+        let result = lighting(&m, &object, &light, &position, &eyev, &normalv, false);
         assert!(result.is_equal(&Color::new(1.6364, 1.6364, 1.6364)));
     }
 
     #[test]
     fn lighting_with_light_behind_surface() {
         let m = Material::new();
+        let object = Sphere::new();
         let position = Tuple::point(0.0, 0.0, 0.0);
         let eyev = Tuple::vector(0.0, 0.0, -1.0);
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
         let light = PointLight::new(Tuple::point(0.0, 0.0, 10.0), Color::new(1.0, 1.0, 1.0));
-        let result = lighting(&m, &light, &position, &eyev, &normalv, false);
+        let result = lighting(&m, &object, &light, &position, &eyev, &normalv, false);
         assert!(result.is_equal(&Color::new(0.1, 0.1, 0.1)));
     }
 
     #[test]
     fn lighting_with_the_surface_in_shadow() {
         let m = Material::new();
+        let object = Sphere::new();
         let position = Tuple::point(0.0, 0.0, 0.0);
         let eyev = Tuple::vector(0.0, 0.0, -1.0);
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
         let light = PointLight::new(Tuple::point(0.0, 0.0, -10.0), Color::new(1.0, 1.0, 1.0));
         let in_shadow = true;
-        let result = lighting(&m, &light, &position, &eyev, &normalv, in_shadow);
+        let result = lighting(&m, &object, &light, &position, &eyev, &normalv, in_shadow);
         assert!(result.is_equal(&Color::new(0.1, 0.1, 0.1)));
     }
 
@@ -179,6 +189,7 @@ mod tests {
             shininess: 200.0,
             pattern: Some(StripePattern::new(WHITE, BLACK)),
         };
+        let object = Sphere::new();
 
         let eyev = Tuple::vector(0.0, 0.0, -1.0);
         let normalv = Tuple::vector(0.0, 0.0, -1.0);
@@ -187,8 +198,24 @@ mod tests {
             Color::new(1.0, 1.0, 1.0),
         );
 
-        let c1 = lighting(&m, &light, &Tuple::point(0.9, 0.0, 0.0), &eyev, &normalv, false);
-        let c2 = lighting(&m, &light, &Tuple::point(1.1, 0.0, 0.0), &eyev, &normalv, false);
+        let c1 = lighting(
+            &m,
+            &object,
+            &light,
+            &Tuple::point(0.9, 0.0, 0.0),
+            &eyev,
+            &normalv,
+            false,
+        );
+        let c2 = lighting(
+            &m,
+            &object,
+            &light,
+            &Tuple::point(1.1, 0.0, 0.0),
+            &eyev,
+            &normalv,
+            false,
+        );
 
         assert!(c1.is_equal(&Color::new(1.0, 1.0, 1.0)));
         assert!(c2.is_equal(&Color::new(0.0, 0.0, 0.0)));
