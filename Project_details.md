@@ -207,3 +207,15 @@ independently of the object. Want your stripes closer together or farther apart?
 Scale them. Want to change how they are oriented on the object? Rotate them.
 What to change their phase? Translate them to shift them to one side or the
 other.
+
+he good news is that every pattern will be essentially
+the same, differentiated only by the function that converts points into colors.
+Besides that function, every pattern will have a transformation matrix, and
+every pattern will need to use it to help transform a given point from world
+space to pattern space before producing a color.
+
+If you take this route, use the following tests as guidelines for writing your
+own. These tests assume that the abstract function (the one that transforms
+the point and delegates to the concrete function) is called pattern_at_shape(pattern,
+shape, point). The concrete function (to be implemented by each pattern) is here
+simply called pattern_at(pattern, point).

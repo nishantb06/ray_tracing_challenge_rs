@@ -1834,7 +1834,80 @@ Summary of changes:
 All 153 tests pass. Pattern lighting now uses world → object → pattern space via `stripe_at_object`, so object and pattern transforms are respected.
 ---------------------
 ---------------------
+`==` in Rust is *just* syntax sugar for the `PartialEq` trait. There is no separate “operator overloading” mechanism apart from implementing `PartialEq`. So:
 
+- When you write `a == b`, the compiler expands it to `PartialEq::eq(&a, &b)`.
+- If `Material` does **not** implement `PartialEq`, `&Material == &Material` is a type error.
+
+You removed `#[derive(PartialEq)]` from `Material`, so in this test:
+
+```rust
+fn a_sphere_has_a_default_material() {
+    let s = Sphere::new();
+    assert_eq!(s.material(), &Material::new());
+}
+```
+
+the types are `&Material` on both sides, but there is no `impl PartialEq<Material> for Material`, so the compiler quite correctly says “binary operation `==` cannot be applied”.
+
+### Would overloading `==` “separately” fix it?
+
+In Rust you “overload `==`” *only* by implementing `PartialEq`. There is no other hook. So yes, to make `==` work on `Material` again, you must provide a `PartialEq` implementation.
+
+Because `Material` now contains a trait object (`Option<Box<dyn Pattern>>` or similar), **you can’t just derive `PartialEq`**:
+
+- Trait objects (`dyn Pattern`) don’t implement `PartialEq` by default.
+- So `#[derive(PartialEq)]` will fail once there is a field of type `Option<Box<dyn Pattern>>`.
+
+The usual options are:
+
+1. **Manual `PartialEq` for `Material` that ignores `pattern`**  
+   For tests like the one in `sphere.rs`, you typically only care that the *default* material’s numeric fields and color match. You can write:
+
+   ```rust
+   impl PartialEq for Material {
+       fn eq(&self, other: &Self) -> bool {
+           self.color.is_equal(&other.color)
+               && self.ambient == other.ambient
+               && self.diffuse == other.diffuse
+               && self.specular == other.specular
+               && self.shininess == other.shininess
+               // optionally ignore pattern, or treat None/Some differently
+       }
+   }
+   ```
+
+   Then `assert_eq!(s.material(), &Material::new());` compiles again, and you don’t have to compare patterns at all.
+
+2. **Change the test to compare what you actually care about**  
+   Instead of requiring `Material` to be `PartialEq`, you could write the assertion in terms of individual fields:
+
+   ```rust
+   let m = s.material();
+   let default = Material::new();
+
+   assert!(m.color.is_equal(&default.color));
+   assert_eq!(m.ambient, default.ambient);
+   // ... and so on
+   ```
+
+   This avoids `PartialEq` entirely.
+
+3. **Use a cloneable handle for `pattern` and still derive `PartialEq`**  
+   If you *really* want a blanket `#[derive(PartialEq)]`, you’d need every field (including the pattern field) to be `PartialEq`. For a trait object, that’s awkward and usually not worth it; you would have to:
+   - Add `PartialEq` as a supertrait to `Pattern`, and
+   - Implement `PartialEq` for trait objects in a meaningful way (e.g., by comparing some ID or type-erased data).
+
+   That’s much more complex than option 1 or 2.
+
+### Recommendation for your case
+
+Given your current use:
+
+- **Yes**, “overloading `==`” via a **manual `impl PartialEq for Material`** is the idiomatic fix if you want to keep the existing test style.
+- In that impl, just compare the numeric fields and `color` (and optionally ignore `pattern`), because those are what the “default material” test is really about.
+
+If you’d like, I can sketch an exact `PartialEq` implementation tailored to your current `Material` struct fields.
 ---------------------
 ---------------------
 ---------------------

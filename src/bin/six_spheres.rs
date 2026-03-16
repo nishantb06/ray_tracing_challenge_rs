@@ -25,7 +25,9 @@ fn main() {
         &(&(&translation(0.0, 0.0, 5.0) * &rotation_y(-FRAC_PI_4)) * &rotation_x(FRAC_PI_2))
             * &scaling(10.0, 0.01, 10.0),
     );
-    left_wall.data.material = floor.data.material.clone();
+    left_wall.data.material = Material::new();
+    left_wall.data.material.color = floor.data.material.color.clone();
+    left_wall.data.material.specular = floor.data.material.specular;
 
     // Right wall
     let mut right_wall = Sphere::new();
@@ -33,7 +35,9 @@ fn main() {
         &(&(&translation(0.0, 0.0, 5.0) * &rotation_y(FRAC_PI_4)) * &rotation_x(FRAC_PI_2))
             * &scaling(10.0, 0.01, 10.0),
     );
-    right_wall.data.material = floor.data.material.clone();
+    right_wall.data.material = Material::new();
+    right_wall.data.material.color = floor.data.material.color.clone();
+    right_wall.data.material.specular = floor.data.material.specular;
 
     // Middle sphere
     let mut middle = Sphere::new();

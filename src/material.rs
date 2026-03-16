@@ -1,10 +1,10 @@
 use crate::canvas::Color;
 use crate::light::PointLight;
-use crate::pattern::StripePattern;
+use crate::pattern::{Pattern};  
 use crate::shape::Shape;
 use crate::tuple::Tuple;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct Material {
     pub color: Color,
@@ -12,7 +12,7 @@ pub struct Material {
     pub diffuse: f64,
     pub specular: f64,
     pub shininess: f64,
-    pub pattern: Option<StripePattern>,
+    pub pattern: Option<Box<dyn Pattern>>,
 }
 
 #[allow(dead_code)]
@@ -29,6 +29,17 @@ impl Material {
     }
 }
 
+impl PartialEq for Material {
+    fn eq(&self, other: &Self) -> bool {
+        self.color.is_equal(&other.color)
+            && self.ambient == other.ambient
+            && self.diffuse == other.diffuse
+            && self.specular == other.specular
+            && self.shininess == other.shininess
+            // optionally ignore pattern, or treat None/Some differently
+    }
+}
+
 pub fn lighting(
     m: &Material,
     object: &dyn Shape,
@@ -42,7 +53,7 @@ pub fn lighting(
     let effective_color = match &m.pattern {
         Some(pattern) => {
             let pattern_color =
-                StripePattern::stripe_at_object(pattern, object, point.clone());
+                pattern.pattern_at_shape(object, &point);
             &pattern_color * &light.intensity
         }
         None => &m.color * &light.intensity,
@@ -87,6 +98,7 @@ mod tests {
     use crate::canvas::{BLACK, WHITE};
     use crate::sphere::Sphere;
     use crate::utils::equal;
+    use crate::pattern::StripePattern;
 
     #[test]
     fn the_default_material() {
@@ -187,7 +199,7 @@ mod tests {
             diffuse: 0.0,
             specular: 0.0,
             shininess: 200.0,
-            pattern: Some(StripePattern::new(WHITE, BLACK)),
+            pattern: Some(Box::new(StripePattern::new(WHITE, BLACK))),
         };
         let object = Sphere::new();
 
