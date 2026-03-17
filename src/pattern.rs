@@ -59,6 +59,76 @@ impl Pattern for StripePattern {
     }
 }
 
+#[derive(Debug,Clone,PartialEq)]
+pub struct GradientPattern {
+    pub a: Color,
+    pub b: Color,
+    pub data: PatternData,
+}
+
+impl GradientPattern {
+    pub fn new(a: Color, b: Color) -> Self {
+        GradientPattern { a, b, data: PatternData::new() }
+    }
+}
+
+impl Pattern for GradientPattern {
+    fn pattern_data(&self) -> &PatternData { &self.data }
+    fn pattern_data_mut(&mut self) -> &mut PatternData { &mut self.data }
+
+    fn pattern_at(&self, point: &Tuple) -> Color {
+        let distance = &self.b - &self.a;
+        let fraction = point.x - point.x.floor();
+        &self.a + &(&distance * fraction)
+    }
+}
+
+#[derive(Debug,Clone,PartialEq)]
+pub struct RingPattern {
+    pub a: Color,
+    pub b: Color,
+    pub data: PatternData,
+}
+
+impl RingPattern {
+    pub fn new(a: Color, b: Color) -> Self {
+        RingPattern { a, b, data: PatternData::new() }
+    }
+}
+
+impl Pattern for RingPattern {
+    fn pattern_data(&self) -> &PatternData { &self.data }
+    fn pattern_data_mut(&mut self) -> &mut PatternData { &mut self.data }
+
+    fn pattern_at(&self, point: &Tuple) -> Color {
+        let radius = (point.x * point.x + point.z * point.z).sqrt();
+        if radius.floor() as i64 % 2 == 0 { self.a.clone() } else { self.b.clone() }
+    }
+}
+
+#[derive(Debug,Clone,PartialEq)]
+pub struct CheckersPattern {
+    pub a: Color,
+    pub b: Color,
+    pub data: PatternData,
+}
+
+impl CheckersPattern {
+    pub fn new(a: Color, b: Color) -> Self {
+        CheckersPattern { a, b, data: PatternData::new() }
+    }
+}
+
+impl Pattern for CheckersPattern {
+    fn pattern_data(&self) -> &PatternData { &self.data }
+    fn pattern_data_mut(&mut self) -> &mut PatternData { &mut self.data }
+
+    fn pattern_at(&self, point: &Tuple) -> Color {
+        let sum = point.x.floor() + point.y.floor() + point.z.floor();
+        if (sum as i64) % 2 == 0 { self.a.clone() } else { self.b.clone() }
+    }
+}
+
 #[cfg(test)]
 pub mod test_support {
     use super::*;
@@ -202,5 +272,62 @@ mod tests {
         pattern.set_transform(translation(0.5, 1.0, 1.5));
         let c = pattern.pattern_at_shape(&shape, &Tuple::point(2.5, 3.0, 3.5));
         assert_eq!(c, Color::new(0.75, 0.5, 0.25));
+    }
+
+    // Gradient pattern tests
+    #[test]
+    fn gradient_linearly_interpolates_between_colors() {
+        let pattern = GradientPattern::new(WHITE, BLACK);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 0.0)), WHITE);
+        assert_eq!(
+            pattern.pattern_at(&Tuple::point(0.25, 0.0, 0.0)),
+            Color::new(0.75, 0.75, 0.75)
+        );
+        assert_eq!(
+            pattern.pattern_at(&Tuple::point(0.5, 0.0, 0.0)),
+            Color::new(0.5, 0.5, 0.5)
+        );
+        assert_eq!(
+            pattern.pattern_at(&Tuple::point(0.75, 0.0, 0.0)),
+            Color::new(0.25, 0.25, 0.25)
+        );
+    }
+
+    // Ring pattern tests
+    #[test]
+    fn ring_extends_in_both_x_and_z() {
+        let pattern = RingPattern::new(WHITE, BLACK);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 0.0)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(1.0, 0.0, 0.0)), BLACK);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 1.0)), BLACK);
+        assert_eq!(
+            pattern.pattern_at(&Tuple::point(0.708, 0.0, 0.708)),
+            BLACK
+        );
+    }
+
+    // 3D checker pattern tests
+    #[test]
+    fn checkers_repeat_in_x() {
+        let pattern = CheckersPattern::new(WHITE, BLACK);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 0.0)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.99, 0.0, 0.0)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(1.01, 0.0, 0.0)), BLACK);
+    }
+
+    #[test]
+    fn checkers_repeat_in_y() {
+        let pattern = CheckersPattern::new(WHITE, BLACK);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 0.0)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.99, 0.0)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 1.01, 0.0)), BLACK);
+    }
+
+    #[test]
+    fn checkers_repeat_in_z() {
+        let pattern = CheckersPattern::new(WHITE, BLACK);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 0.0)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 0.99)), WHITE);
+        assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 1.01)), BLACK);
     }
 }
