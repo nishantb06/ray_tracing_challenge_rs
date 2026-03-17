@@ -13,6 +13,7 @@ pub struct Material {
     pub specular: f64,
     pub shininess: f64,
     pub pattern: Option<Box<dyn Pattern>>,
+    pub reflective: f64,
 }
 
 #[allow(dead_code)]
@@ -25,6 +26,7 @@ impl Material {
             specular: 0.9,
             shininess: 200.0,
             pattern: None,
+            reflective: 0.0,
         }
     }
 }
@@ -200,6 +202,7 @@ mod tests {
             specular: 0.0,
             shininess: 200.0,
             pattern: Some(Box::new(StripePattern::new(WHITE, BLACK))),
+            reflective:0.0,
         };
         let object = Sphere::new();
 

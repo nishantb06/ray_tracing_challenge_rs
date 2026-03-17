@@ -6,7 +6,7 @@ use ray_tracing_challenge_rs::pattern::{GradientPattern, Pattern, RingPattern, S
 use ray_tracing_challenge_rs::plane::Plane;
 use ray_tracing_challenge_rs::shape::Shape;
 use ray_tracing_challenge_rs::sphere::Sphere;
-use ray_tracing_challenge_rs::transformation::{rotation_x, rotation_y, rotation_z, scaling, translation, view_transform};
+use ray_tracing_challenge_rs::transformation::{rotation_x, rotation_z, scaling, translation, view_transform};
 use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
 use std::f64::consts::FRAC_PI_3;

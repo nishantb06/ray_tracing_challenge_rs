@@ -95,6 +95,25 @@ pub fn color_at(world: &World, ray: &Ray) -> Color {
         }
     }
 }
+
+pub fn reflected_color(world: &World, comps: &Computations) -> Color {
+    // if comps.object.material.reflective = 0 return color(0,0,0)
+    let reflective = comps.object.material().reflective;
+    if crate::utils::equal(reflective, 0.0) {
+        return Color::new(0.0, 0.0, 0.0);
+    }
+
+    // reflect_ray ← ray(comps.over_point, comps.reflectv)
+    let reflect_ray = Ray::new(comps.over_point.clone(), comps.reflectv.clone());
+
+    // color ← color_at(world, reflect_ray)
+    let color = color_at(world, &reflect_ray);
+
+    // return color * comps.object.material.reflective
+    &color * reflective
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +264,68 @@ mod tests {
         let comps = prepare_computations(&i, &r);
         assert!(comps.over_point.z < -crate::utils::EPSILON / 2.0);
         assert!(comps.point.z > comps.over_point.z);
+    }
+
+    #[test]
+    fn the_reflected_color_for_a_nonreflective_material() {
+        // Given w ← default_world()
+        let mut w = World::default_world();
+
+        // And shape ← the second object in w
+        // And shape.material.ambient ← 1
+        w.objects[1].shape_data_mut().material.ambient = 1.0;
+        let shape = w.objects[1].as_ref();
+
+        // And r ← ray(point(0, 0, 0), vector(0, 0, 1))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, 0.0),
+            Tuple::vector(0.0, 0.0, 1.0),
+        );
+
+        // And i ← intersection(1, shape)
+        let i = Intersection::new(1.0, shape);
+
+        // When comps ← prepare_computations(i, r)
+        let comps = prepare_computations(&i, &r);
+
+        // And color ← reflected_color(w, comps)
+        let color = reflected_color(&w, &comps);
+
+        // Then color = color(0, 0, 0)
+        assert_eq!(color, Color::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn the_reflected_color_for_a_reflective_material() {
+        let mut w = World::default_world();
+
+        // create and configure the plane
+        let mut shape = Plane::new();
+        shape.shape_data_mut().material.reflective = 0.5;
+        shape.set_transform(translation(0.0, -1.0, 0.0));
+
+        // And shape is added to w
+        w.add_shape(shape);
+
+        // now get a reference to that shape from the world
+        let shape_ref: &dyn Shape = w.objects.last().unwrap().as_ref();
+
+        // And r ← ray(point(0, 0, -3), vector(0, -√2/2, √2/2))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, -3.0),
+            Tuple::vector(
+                0.0,
+                -std::f64::consts::FRAC_1_SQRT_2,
+                std::f64::consts::FRAC_1_SQRT_2,
+            ),
+        );
+
+        // And i ← intersection(√2, shape)
+        let i = Intersection::new(std::f64::consts::SQRT_2, shape_ref);
+
+        let comps = prepare_computations(&i, &r);
+        let color = reflected_color(&w, &comps);
+        let expected = Color::new(0.1903323, 0.237915, 0.142749);
+        assert!(color.is_equal(&expected));
     }
 }

@@ -40,6 +40,7 @@ pub struct Computations<'a> {
     pub normal_vector: Tuple,
     pub inside: bool,
     pub over_point: Tuple,
+    pub reflectv: Tuple,
 }
 
 // precomputes the point (in world space) where the intersection occurred,
@@ -54,6 +55,7 @@ pub fn prepare_computations<'a>(intersection: &'a Intersection<'a>, ray: &Ray) -
         normal_v = -&normal_v;
     }
     let over_point = &point + &(&normal_v * EPSILON);
+    let reflectv = ray.direction.reflect(&normal_v);
     Computations {
         t: intersection.t.clone(),
         object: intersection.object,
@@ -62,6 +64,7 @@ pub fn prepare_computations<'a>(intersection: &'a Intersection<'a>, ray: &Ray) -
         normal_vector: normal_v,
         inside,
         over_point,
+        reflectv
     }
 }
 
@@ -179,5 +182,37 @@ mod tests {
         assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
         assert!(comps.inside);
         assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
+    }
+
+    use crate::plane::Plane;
+
+    #[test]
+    fn precomputing_the_reflection_vector() {
+        // shape ← plane()
+        let shape = Plane::new();
+
+        // r ← ray(point(0, 1, -1), vector(0, -√2/2, √2/2))
+        let r = Ray::new(
+            Tuple::point(0.0, 1.0, -1.0),
+            Tuple::vector(
+                0.0,
+                -std::f64::consts::FRAC_1_SQRT_2,
+                std::f64::consts::FRAC_1_SQRT_2,
+            ),
+        );
+
+        // i ← intersection(√2, shape)
+        let i = Intersection::new(std::f64::consts::SQRT_2, &shape);
+
+        // comps ← prepare_computations(i, r)
+        let comps = prepare_computations(&i, &r);
+
+        // Then comps.reflectv = vector(0, √2/2, √2/2)
+        let expected = Tuple::vector(
+            0.0,
+            std::f64::consts::FRAC_1_SQRT_2,
+            std::f64::consts::FRAC_1_SQRT_2,
+        );
+        assert!(comps.reflectv.is_equal(&expected));
     }
 }
