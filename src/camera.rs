@@ -3,6 +3,7 @@ use crate::matrix::Matrix;
 use crate::ray::Ray;
 use crate::tuple::Tuple;
 use crate::world::{World, color_at};
+use crate::utils::MAX_RECURSION_DEPTH;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -65,7 +66,7 @@ impl Camera {
         for y in 0..self.vsize {
             for x in 0..self.hsize {
                 let ray = self.ray_for_pixel(x as f64, y as f64);
-                let color = color_at(world, &ray);
+                let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
                 image.write_pixel(x, y, color);
             }
         }
