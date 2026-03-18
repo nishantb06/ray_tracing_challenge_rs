@@ -267,3 +267,13 @@ would you need to do to allow objects to individually declare that they cast
 no shadow?
 Chew on that one for a bit. When you’re ready to move on, turn the page! Next
 up, you’ll add another primitive shape to your ray tracer: the humble cube.
+Here’s another challenge: using only two cubes, can you make a room whose
+floor and ceiling have a different texture than the walls?
+You can also make these algorithms faster. For example, when comparing a
+ray with the cube’s sides, the algorithm insists on checking all six planes,
+even if it’s clear by the first or second comparison that the ray misses. In a
+production-quality ray tracer, this kind of wastefulness would be unacceptable.
+How might you optimize it? What can you do to minimize the number of
+comparisons it makes?
+Ponder that for a bit, if you like. When you’re ready, read on. In the next
+chapter you’ll add two more primitives: cylinders and cones.
