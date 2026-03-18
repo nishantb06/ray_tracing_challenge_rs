@@ -1,5 +1,5 @@
 use crate::canvas::Color;
-use crate::intersection::{Computations, Intersection, Intersections, prepare_computations};
+use crate::intersection::{Computations, Intersection, Intersections, prepare_computations, schlick};
 use crate::light::PointLight;
 use crate::material::lighting;
 use crate::ray::Ray;
@@ -78,7 +78,7 @@ pub fn shade_hit(world: &World, comps: &Computations, remaining: i32) -> Color {
                 comps.object.material(),
                 comps.object,
                 light,
-                &comps.point,
+                &comps.over_point,   // use over_point as in the book
                 &comps.eye_vector,
                 &comps.normal_vector,
                 shadowed,
@@ -86,12 +86,16 @@ pub fn shade_hit(world: &World, comps: &Computations, remaining: i32) -> Color {
             &acc + &c
         });
 
-    // reflected ← reflected_color(world, comps, remaining)
     let reflected = reflected_color(world, comps, remaining);
     let refracted = refracted_color(world, comps, remaining);
+    let material = comps.object.material();
 
-    // return surface + reflected
-    &(&surface + &reflected) + &refracted
+    if material.reflective > 0.0 && material.transparency > 0.0 {
+        let reflectance = schlick(comps);
+        &surface + &(&(&reflected * reflectance) + &(&refracted * (1.0 - reflectance)))
+    } else {
+        &(&surface + &reflected) + &refracted
+    }
 }
 
 pub fn color_at(world: &World, ray: &Ray, remaining: i32) -> Color {
@@ -716,6 +720,77 @@ mod tests {
 
         // Then color = color(0.93642, 0.68642, 0.68642)
         let expected = Color::new(0.93642, 0.68642, 0.68642);
+        assert!(color.is_equal(&expected));
+    }
+
+    #[test]
+    fn shade_hit_with_a_reflective_transparent_material() {
+        use crate::plane::Plane;
+        use crate::sphere::Sphere;
+        use crate::transformation::translation;
+        use crate::tuple::Tuple;
+        use crate::intersection::{Intersection, Intersections};
+    
+        // Given w ← default_world()
+        let mut w = World::default_world();
+    
+        // And r ← ray(point(0, 0, -3), vector(0, -√2/2, √2/2))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, -3.0),
+            Tuple::vector(
+                0.0,
+                -std::f64::consts::FRAC_1_SQRT_2,
+                std::f64::consts::FRAC_1_SQRT_2,
+            ),
+        );
+    
+        // And floor ← plane() with:
+        // | transform            | translation(0, -1, 0) |
+        // | material.reflective  | 0.5                   |
+        // | material.transparency| 0.5                   |
+        // | material.refractive_index | 1.5             |
+        let mut floor = Plane::new();
+        {
+            let data = floor.shape_data_mut();
+            data.material.reflective = 0.5;
+            data.material.transparency = 0.5;
+            data.material.refractive_index = 1.5;
+        }
+        floor.set_transform(translation(0.0, -1.0, 0.0));
+    
+        // And floor is added to w
+        w.add_shape(floor);
+    
+        // And ball ← sphere() with:
+        // | material.color   | (1, 0, 0)               |
+        // | material.ambient | 0.5                     |
+        // | transform        | translation(0, -3.5, -0.5) |
+        let mut ball = Sphere::new();
+        {
+            let data = ball.shape_data_mut();
+            data.material.color = Color::new(1.0, 0.0, 0.0);
+            data.material.ambient = 0.5;
+        }
+        ball.set_transform(translation(0.0, -3.5, -0.5));
+    
+        // And ball is added to w
+        w.add_shape(ball);
+    
+        // floor is the third object: index 2 (0: s1, 1: s2, 2: floor, 3: ball)
+        let floor_ref: &dyn Shape = w.objects[2].as_ref();
+    
+        // And xs ← intersections(√2:floor)
+        let i = Intersection::new(std::f64::consts::SQRT_2, floor_ref);
+        let xs = Intersections::new(vec![i]);
+    
+        // When comps ← prepare_computations(xs[0], r, xs)
+        let comps = prepare_computations(&xs.data[0], &r, &xs);
+    
+        // And color ← shade_hit(w, comps, 5)
+        let color = shade_hit(&w, &comps, 5);
+    
+        // Then color = color(0.93391, 0.69643, 0.69243)
+        let expected = Color::new(0.93391, 0.69643, 0.69243);
         assert!(color.is_equal(&expected));
     }
 }

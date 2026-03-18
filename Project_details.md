@@ -224,3 +224,46 @@ simply called pattern_at(pattern, point).
 As mentioned, n1 and n2 are the names given to the refractive indices of the
 materials on either side of a ray-object intersection, with n1 belonging to the
 material being exited, and n2 belonging to the material being entered.
+
+# Important notes for the reflection and refraction guidelines 
+Ray tracers are best known for mirrors and glass. Take some time and
+experiment, to see why. Here are a few tips for figuring out how to employ
+reflection and refraction effectively in your scenes.
+1. 2. 3. 4. We tend to think of glass as exclusively transparent, but no one is sur-
+prised to look in a window and see their own ghostly reflection superim-
+posed over the scene. When rendering glass or any similar material, set
+both transparency and reflectivity to high values, 0.9 or even 1. This allows
+the Fresnel effect to kick in, and gives your material an added touch of
+realism!
+Because the reflected and refracted colors are added to the surface color,
+they’ll tend to make such objects brighter. You can tone down the mate-
+rial’s diffuse and ambient properties to compensate. The more transparent
+or reflective the surface, the smaller the diffuse property should be. This
+way, more of the color comes from the secondary rays, and less from the
+object’s surface.
+If you’d like a subtly colored mirror, or slightly tinted glass, use a very
+dark color, instead of a very light one. Red glass, for instance, should use
+a very dark red, almost black, instead of a very bright red. In general, the
+more reflective or transparent the surface, the darker its surface color
+should be. Note that if you add color, make sure that you have some diffuse
+and possibly ambient contribution, too; otherwise, your surface will render
+as black regardless of what color you give to it.
+Reflective and transparent surfaces pair nicely with tight specular high-
+lights. Set specular to 1 and bump shininess to 300 or more to get a highlight
+that really shines.
+Also, here’s a closing challenge for you: suppose you wanted to render a scene
+where you were looking through the surface of a pond at some rocks beneath
+it. In terms of implementation, that would be a transparent plane, with some
+spheres scattered below it. As your ray tracer is currently implemented, the
+plane is going to cast a shadow on anything beneath it, which leaves everything
+under the water in darkness, ruining the effect. You could add a light source
+beneath the plane, but that will introduce odd shadows and highlights—not
+a good solution either.
+What you really want is for some objects to “opt out” of the shadow calculation.
+The surface of the pond, for instance, should be ignored when calculating
+shadows.
+How would you go about changing your ray tracer to support that? What
+would you need to do to allow objects to individually declare that they cast
+no shadow?
+Chew on that one for a bit. When you’re ready to move on, turn the page! Next
+up, you’ll add another primitive shape to your ray tracer: the humble cube.

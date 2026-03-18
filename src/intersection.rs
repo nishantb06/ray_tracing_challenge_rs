@@ -131,6 +131,31 @@ impl<'a> Intersections<'a> {
     }
 }
 
+pub fn schlick(comps: &Computations) -> f64 {
+    // find the cosine of the angle between the eye and normal vectors
+    let mut cos = comps.eye_vector.dot(&comps.normal_vector);
+
+    // total internal reflection can only occur if n1 > n2
+    if comps.n1 > comps.n2 {
+        let n = comps.n1 / comps.n2;
+        let sin2_t = n * n * (1.0 - cos * cos);
+
+        // return 1.0 if we have total internal reflection
+        if sin2_t > 1.0 {
+            return 1.0;
+        }
+
+        // compute cosine of theta_t using trig identity
+        let cos_t = (1.0 - sin2_t).sqrt();
+
+        // when n1 > n2, use cos(theta_t) instead
+        cos = cos_t;
+    }
+
+    let r0 = ((comps.n1 - comps.n2) / (comps.n1 + comps.n2)).powi(2);
+    r0 + (1.0 - r0) * (1.0 - cos).powi(5)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,4 +393,97 @@ mod tests {
         // And comps.point.z < comps.under_point.z
         assert!(comps.point.z < comps.under_point.z);
     }
+
+    #[test]
+    fn the_schlick_approximation_under_total_internal_reflection() {
+        use crate::sphere::Sphere;
+        use crate::ray::Ray;
+        use crate::tuple::Tuple;
+
+        // Given shape ← glass_sphere()
+        let shape = Sphere::glass_sphere();
+
+        // And r ← ray(point(0, 0, √2/2), vector(0, 1, 0))
+        let half_sqrt2 = std::f64::consts::SQRT_2 / 2.0;
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, half_sqrt2),
+            Tuple::vector(0.0, 1.0, 0.0),
+        );
+
+        // And xs ← intersections(-√2/2:shape, √2/2:shape)
+        let xs = Intersections::new(vec![
+            Intersection::new(-half_sqrt2, &shape),
+            Intersection::new(half_sqrt2, &shape),
+        ]);
+
+        // When comps ← prepare_computations(xs[1], r, xs)
+        let comps = prepare_computations(&xs.data[1], &r, &xs);
+
+        // And reflectance ← schlick(comps)
+        let reflectance = schlick(&comps);
+
+        // Then reflectance = 1.0
+        assert!(crate::utils::equal(reflectance, 1.0));
+    }
+
+    #[test]
+    fn the_schlick_approximation_with_a_perpendicular_viewing_angle() {
+        use crate::sphere::Sphere;
+        use crate::ray::Ray;
+        use crate::tuple::Tuple;
+    
+        // Given shape ← glass_sphere()
+        let shape = Sphere::glass_sphere();
+    
+        // And r ← ray(point(0, 0, 0), vector(0, 1, 0))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, 0.0),
+            Tuple::vector(0.0, 1.0, 0.0),
+        );
+    
+        // And xs ← intersections(-1:shape, 1:shape)
+        let xs = Intersections::new(vec![
+            Intersection::new(-1.0, &shape),
+            Intersection::new(1.0, &shape),
+        ]);
+    
+        // When comps ← prepare_computations(xs[1], r, xs)
+        let comps = prepare_computations(&xs.data[1], &r, &xs);
+    
+        // And reflectance ← schlick(comps)
+        let reflectance = schlick(&comps);
+    
+        // Then reflectance = 0.04
+        assert!(crate::utils::equal(reflectance, 0.04));
+    }
+    
+    #[test]
+    fn the_schlick_approximation_with_small_angle_and_n2_greater_than_n1() {
+        use crate::sphere::Sphere;
+        use crate::ray::Ray;
+        use crate::tuple::Tuple;
+    
+        // Given shape ← glass_sphere()
+        let shape = Sphere::glass_sphere();
+    
+        // And r ← ray(point(0, 0.99, -2), vector(0, 0, 1))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.99, -2.0),
+            Tuple::vector(0.0, 0.0, 1.0),
+        );
+    
+        // And xs ← intersections(1.8589:shape)
+        let xs = Intersections::new(vec![
+            Intersection::new(1.8589, &shape),
+        ]);
+    
+        // When comps ← prepare_computations(xs[0], r, xs)
+        let comps = prepare_computations(&xs.data[0], &r, &xs);
+    
+        // And reflectance ← schlick(comps)
+        let reflectance = schlick(&comps);
+    
+        // Then reflectance = 0.48873
+        assert!(crate::utils::equal(reflectance, 0.48873));
+    }    
 }
