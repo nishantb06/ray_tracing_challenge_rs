@@ -277,3 +277,6 @@ How might you optimize it? What can you do to minimize the number of
 comparisons it makes?
 Ponder that for a bit, if you like. When you’re ready, read on. In the next
 chapter you’ll add two more primitives: cylinders and cones.
+
+
+cargo run --bin ppm_to_png -- media/images/cover_scene.ppm media/images/cover_scene.png
