@@ -1,8 +1,20 @@
-# Ray Tracing Challenge in Rust
+<div align="center" style="position: relative;">
 
-Rust implementation of *The Ray Tracer Challenge* by Jamis Buck, built from first principles:
+<h1 style="margin-bottom: 0.2em;">Ray Tracing Challenge in Rust</h1>
+
+<a href="https://github.com/nishantb06/ray_tracing_challenge_rs/actions/workflows/rust-tests.yml" style="position: absolute; top: 0.5em; right: 10.2em;">
+  <img src="https://github.com/nishantb06/ray_tracing_challenge_rs/actions/workflows/rust-tests.yml/badge.svg" alt="Tests" />
+</a>
+
+<a href="https://github.com/rust-lang/rust" style="position: absolute; top: 0.5em; right: 1.2em;">
+  <img src="https://img.shields.io/badge/Lang-Rust-e9884d" alt="Rust" />
+</a>
+
+<p><strong>Rust implementation of <em>The Ray Tracer Challenge</em> by Jamis Buck, built from first principles:
 tuples, matrices, transformations, rays, intersections, materials, lights, patterns, reflections,
-refractions, and multi-object worlds.
+refractions, and multi-object worlds.</strong></p>
+
+</div>
 
 ![Cover scene render](media/images/cover_scene.png)
 
