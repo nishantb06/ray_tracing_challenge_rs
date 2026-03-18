@@ -4,6 +4,7 @@ use crate::tuple::Tuple;
 use crate::utils::EPSILON;
 use crate::shape::Shape;
 
+#[derive(Clone)]
 #[allow(dead_code)]
 pub struct Intersection<'a> {
     pub t: f64,
@@ -41,30 +42,76 @@ pub struct Computations<'a> {
     pub inside: bool,
     pub over_point: Tuple,
     pub reflectv: Tuple,
+    pub n1: f64,
+    pub n2: f64,
+    pub under_point: Tuple,
 }
 
 // precomputes the point (in world space) where the intersection occurred,
 // the eye vector (pointing back toward the eye, or camera), and the normal vector.
-pub fn prepare_computations<'a>(intersection: &'a Intersection<'a>, ray: &Ray) -> Computations<'a> {
-    let point = ray.position(intersection.t.clone());
+pub fn prepare_computations<'a>(
+    intersection: &'a Intersection<'a>,
+    ray: &Ray,
+    xs: &Intersections<'a>,
+) -> Computations<'a> {
+    // existing geometric precomputations
+    let point = ray.position(intersection.t);
     let mut normal_v = intersection.object.normal_at(&point);
-    let eye_v = -&(ray.direction);
+    let eye_v = -&ray.direction;
     let mut inside = false;
+
     if normal_v.dot(&eye_v) < 0.0 {
         inside = true;
         normal_v = -&normal_v;
     }
+
     let over_point = &point + &(&normal_v * EPSILON);
+    let under_point = &point - &(&normal_v * EPSILON);
     let reflectv = ray.direction.reflect(&normal_v);
+
+    // new: refractive indices via containers algorithm
+    let mut n1 = 1.0;
+    let mut n2 = 1.0;
+    let mut containers: Vec<&'a dyn Shape> = Vec::new();
+
+    for i in &xs.data {
+        // if this intersection is the hit, set n1 from current containers
+        if std::ptr::eq(i, intersection) {
+            n1 = containers
+                .last()
+                .map(|o| o.material().refractive_index)
+                .unwrap_or(1.0);
+        }
+
+        // update containers: exiting if already present, otherwise entering
+        if let Some(pos) = containers.iter().position(|o| o.id() == i.object.id()) {
+            containers.remove(pos);
+        } else {
+            containers.push(i.object);
+        }
+
+        // if this intersection is the hit, set n2 and stop
+        if std::ptr::eq(i, intersection) {
+            n2 = containers
+                .last()
+                .map(|o| o.material().refractive_index)
+                .unwrap_or(1.0);
+            break;
+        }
+    }
+
     Computations {
-        t: intersection.t.clone(),
+        t: intersection.t,
         object: intersection.object,
-        point: point,
+        point,
         eye_vector: eye_v,
         normal_vector: normal_v,
         inside,
         over_point,
-        reflectv
+        reflectv,
+        n1,
+        n2,
+        under_point,
     }
 }
 
@@ -155,7 +202,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let shape = Sphere::new();
         let i = Intersection::new(4.0, &shape);
-        let comps = prepare_computations(&i, &r);
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
         assert!(crate::utils::equal(comps.t, i.t));
         assert_eq!(comps.object.id(), i.object.id());
         assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, -1.0)));
@@ -168,7 +215,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let shape = Sphere::new();
         let i = Intersection::new(4.0, &shape);
-        let comps = prepare_computations(&i, &r);
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
         assert!(!comps.inside);
     }
 
@@ -177,7 +224,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));
         let shape = Sphere::new();
         let i = Intersection::new(1.0, &shape);
-        let comps = prepare_computations(&i, &r);
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
         assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, 1.0)));
         assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
         assert!(comps.inside);
@@ -205,7 +252,7 @@ mod tests {
         let i = Intersection::new(std::f64::consts::SQRT_2, &shape);
 
         // comps ← prepare_computations(i, r)
-        let comps = prepare_computations(&i, &r);
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
 
         // Then comps.reflectv = vector(0, √2/2, √2/2)
         let expected = Tuple::vector(
@@ -214,5 +261,111 @@ mod tests {
             std::f64::consts::FRAC_1_SQRT_2,
         );
         assert!(comps.reflectv.is_equal(&expected));
+    }
+
+    #[test]
+    fn finding_n1_and_n2_at_various_intersections() {
+        use crate::sphere::Sphere;
+        use crate::transformation::{scaling, translation};
+        use crate::tuple::Tuple;
+        use crate::ray::Ray;
+    
+        // Given A ← glass_sphere() with:
+        // | transform              | scaling(2, 2, 2) |
+        // | material.refractive_index | 1.5          |
+        let mut a = Sphere::glass_sphere();
+        a.set_transform(scaling(2.0, 2.0, 2.0));
+        a.material_mut().refractive_index = 1.5;
+    
+        // And B ← glass_sphere() with:
+        // | transform              | translation(0, 0, -0.25) |
+        // | material.refractive_index | 2.0                  |
+        let mut b = Sphere::glass_sphere();
+        b.set_transform(translation(0.0, 0.0, -0.25));
+        b.material_mut().refractive_index = 2.0;
+    
+        // And C ← glass_sphere() with:
+        // | transform              | translation(0, 0, 0.25) |
+        // | material.refractive_index | 2.5                 |
+        let mut c = Sphere::glass_sphere();
+        c.set_transform(translation(0.0, 0.0, 0.25));
+        c.material_mut().refractive_index = 2.5;
+    
+        // And r ← ray(point(0, 0, -4), vector(0, 0, 1))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, -4.0),
+            Tuple::vector(0.0, 0.0, 1.0),
+        );
+    
+        // And xs ← intersections(2:A, 2.75:B, 3.25:C, 4.75:B, 5.25:C, 6:A)
+        let xs = Intersections::new(vec![
+            Intersection::new(2.0,   &a),
+            Intersection::new(2.75,  &b),
+            Intersection::new(3.25,  &c),
+            Intersection::new(4.75,  &b),
+            Intersection::new(5.25,  &c),
+            Intersection::new(6.0,   &a),
+        ]);
+    
+        // Examples table from the book
+        let examples = [
+            (0, 1.0, 1.5),
+            (1, 1.5, 2.0),
+            (2, 2.0, 2.5),
+            (3, 2.5, 2.5),
+            (4, 2.5, 1.5),
+            (5, 1.5, 1.0),
+        ];
+    
+        for (index, expected_n1, expected_n2) in examples {
+            let i = &xs.data[index];
+            let comps = prepare_computations(i, &r, &xs);
+            assert!(
+                crate::utils::equal(comps.n1, expected_n1),
+                "index {}: expected n1 = {}, got {}",
+                index, expected_n1, comps.n1
+            );
+            assert!(
+                crate::utils::equal(comps.n2, expected_n2),
+                "index {}: expected n2 = {}, got {}",
+                index, expected_n2, comps.n2
+            );
+        }
+    }
+
+    #[test]
+    fn the_under_point_is_offset_below_the_surface() {
+        use crate::ray::Ray;
+        use crate::sphere::Sphere;
+        use crate::transformation::translation;
+        use crate::tuple::Tuple;
+        use crate::utils::EPSILON;
+        use crate::intersection::{Intersection, Intersections, prepare_computations};
+    
+        // Given r ← ray(point(0, 0, -5), vector(0, 0, 1))
+        let r = Ray::new(
+            Tuple::point(0.0, 0.0, -5.0),
+            Tuple::vector(0.0, 0.0, 1.0),
+        );
+    
+        // And shape ← glass_sphere() with:
+        // | transform | translation(0, 0, 1) |
+        let mut shape = Sphere::glass_sphere();
+        shape.set_transform(translation(0.0, 0.0, 1.0));
+    
+        // And i ← intersection(5, shape)
+        let i = Intersection::new(5.0, &shape as &dyn Shape);
+    
+        // And xs ← intersections(i)
+        let xs = Intersections::new(vec![i]);
+    
+        // When comps ← prepare_computations(i, r, xs)
+        let comps = prepare_computations(&xs.data[0], &r, &xs);
+    
+        // Then comps.under_point.z > EPSILON/2
+        assert!(comps.under_point.z > EPSILON / 2.0);
+    
+        // And comps.point.z < comps.under_point.z
+        assert!(comps.point.z < comps.under_point.z);
     }
 }

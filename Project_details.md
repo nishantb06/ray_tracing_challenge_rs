@@ -219,3 +219,8 @@ own. These tests assume that the abstract function (the one that transforms
 the point and delegates to the concrete function) is called pattern_at_shape(pattern,
 shape, point). The concrete function (to be implemented by each pattern) is here
 simply called pattern_at(pattern, point).
+
+
+As mentioned, n1 and n2 are the names given to the refractive indices of the
+materials on either side of a ray-object intersection, with n1 belonging to the
+material being exited, and n2 belonging to the material being entered.

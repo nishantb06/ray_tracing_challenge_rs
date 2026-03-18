@@ -73,7 +73,7 @@ fn main() {
     )];
 
     // Move camera slightly farther back so ball and its reflection fit comfortably
-    let mut camera = Camera::new(800, 400, FRAC_PI_3);
+    let mut camera = Camera::new(3840, 2160, FRAC_PI_3);
     camera.transform = view_transform(
         &Tuple::point(0.0, 2.0, -9.0),
         &Tuple::point(0.0, 1.0, 0.0),

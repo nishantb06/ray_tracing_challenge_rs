@@ -16,6 +16,14 @@ impl Sphere {
             data: ShapeData::new(),
         }
     }
+
+    pub fn glass_sphere() -> Self {
+        let mut s = Sphere { data: ShapeData::new() };
+        let m = s.material_mut();
+        m.transparency = 1.0;
+        m.refractive_index = 1.5;
+        return s;
+    }
 }
 
 impl Shape for Sphere {
@@ -51,6 +59,7 @@ mod tests {
     use crate::material::Material;
     use crate::ray::Ray;
     use crate::tuple::Tuple;
+    use crate::matrix::Matrix;
 
     #[test]
     fn sphere_is_a_shape() {
@@ -212,5 +221,19 @@ mod tests {
         let mut s = Sphere::new();
         s.material_mut().ambient = 1.0;
         assert!(crate::utils::equal(s.material().ambient, 1.0));
+    }
+
+    #[test]
+    fn glass_sphere_has_glassy_defaults() {
+        let s = Sphere::glass_sphere();
+
+        // Then s.transform = identity_matrix
+        assert_eq!(s.transform(), &Matrix::identity(4));
+
+        // And s.material.transparency = 1.0
+        assert!(crate::utils::equal(s.material().transparency, 1.0));
+
+        // And s.material.refractive_index = 1.5
+        assert!(crate::utils::equal(s.material().refractive_index, 1.5));
     }
 }

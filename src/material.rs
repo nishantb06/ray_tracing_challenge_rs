@@ -14,6 +14,8 @@ pub struct Material {
     pub shininess: f64,
     pub pattern: Option<Box<dyn Pattern>>,
     pub reflective: f64,
+    pub transparency: f64,
+    pub refractive_index: f64,
 }
 
 #[allow(dead_code)]
@@ -27,6 +29,8 @@ impl Material {
             shininess: 200.0,
             pattern: None,
             reflective: 0.0,
+            transparency: 0.0,
+            refractive_index: 1.0,
         }
     }
 }
@@ -203,6 +207,8 @@ mod tests {
             shininess: 200.0,
             pattern: Some(Box::new(StripePattern::new(WHITE, BLACK))),
             reflective:0.0,
+            transparency:0.0,
+            refractive_index:1.0,
         };
         let object = Sphere::new();
 
@@ -234,5 +240,12 @@ mod tests {
 
         assert!(c1.is_equal(&Color::new(1.0, 1.0, 1.0)));
         assert!(c2.is_equal(&Color::new(0.0, 0.0, 0.0)));
+    }
+
+    #[test]
+    fn default_material_transparency_and_refractive_index() {
+        let m = Material::new();
+        assert!(equal(m.transparency, 0.0));
+        assert!(equal(m.refractive_index, 1.0));
     }
 }
