@@ -1909,6 +1909,26 @@ Given your current use:
 
 If you’d like, I can sketch an exact `PartialEq` implementation tailored to your current `Material` struct fields.
 ---------------------
+
+All 9 cylinder tests pass. Summary of what was wrong and what changed:
+
+**What was wrong**
+
+- When the ray was **parallel to the y-axis** (`a.abs() < EPSILON`), the code returned an empty list immediately and never called `intersect_caps`. So a ray straight down the axis (e.g. case 0: origin `(0, 3, 0)`, direction `(0, -1, 0)`) got 0 hits instead of 2 (top and bottom cap).
+- When **disc < 0** (no hit with the curved side), the code also returned empty and never tried the caps. So any ray that only hits the caps (e.g. case 1) could get 0 hits if the side was missed.
+
+**What was changed**
+
+- The early returns were removed. The logic is now:
+  1. If the ray is **not** parallel to the axis (`a.abs() >= EPSILON`), compute the side intersections and push any that lie between `minimum` and `maximum` into `xs`.
+  2. **Always** call `self.intersect_caps(ray, &mut xs)` so cap hits are considered for closed cylinders.
+  3. Return `Intersections::new(xs)` (which sorts by `t`).
+
+So:
+
+- Parallel rays (case 0) only get cap hits and now return 2.
+- Rays that hit the side and a cap (case 1) get both and still return 2.
+- Rays that only hit the caps still get those hits instead of 0.
 ---------------------
 ---------------------
 ---------------------

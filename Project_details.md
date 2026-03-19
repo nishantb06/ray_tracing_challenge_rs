@@ -280,3 +280,6 @@ chapter you’ll add two more primitives: cylinders and cones.
 
 
 cargo run --bin ppm_to_png -- media/images/cover_scene.ppm media/images/cover_scene.png
+
+Note that the extents are exclusive, meaning if the cylinder is truncated at
+y=2, the cylinder extends up to—but not including—that limit.

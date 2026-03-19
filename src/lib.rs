@@ -14,3 +14,4 @@ pub mod shape;
 pub mod plane;
 pub mod pattern;
 pub mod cube;
+pub mod cylinder;
