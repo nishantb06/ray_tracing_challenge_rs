@@ -73,6 +73,7 @@ cargo run --bin ppm_to_png -- media/images_ppm/cover_scene.ppm media/images/cove
 | Wall backdrop | ![Wall backdrop](media/images/wall_backdrop.png) |
 | Ceiling | ![Ceiling](media/images/ceiling.png) |
 | Embedded sphere | ![Embedded sphere](media/images/embedded_sphere.png) |
+| Cone and Cylinder | ![Cone and Cylinder](media/images/cone_and_cylinder.png) |
 
 Additional renders are available in `media/images/`.
 
