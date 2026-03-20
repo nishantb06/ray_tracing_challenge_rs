@@ -249,3 +249,8 @@ mod tests {
         assert!(equal(m.refractive_index, 1.0));
     }
 }
+
+// TODO : Also, you may soon realize that materials applied to a group have no effect
+// at all on the shapes it contains. What if you wanted the shapes in your ray
+// tracer to be able to “inherit” materials from their parents? How might you
+// extend your code to make that happen?

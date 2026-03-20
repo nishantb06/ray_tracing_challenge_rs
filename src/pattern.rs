@@ -331,3 +331,12 @@ mod tests {
         assert_eq!(pattern.pattern_at(&Tuple::point(0.0, 0.0, 1.01)), BLACK);
     }
 }
+
+// TODO : You’re just about done with groups, but there’s one more bit to address. In
+// Transforming Patterns, on page 130, you allowed patterns to be transformed
+// by converting points from world space to object space, and from there to
+// pattern space, before computing the color. For those patterns to behave
+// nicely when applied to objects in groups, you’ll need to use this new
+// world_to_object() function when converting points from world space to object
+// space. Otherwise, the patterns won’t apply the group transformations and
+// won’t look like you expect. You’re on your own for this one; make it so!

@@ -16,3 +16,4 @@ pub mod pattern;
 pub mod cube;
 pub mod cylinder;
 pub mod cone;
+pub mod group;
