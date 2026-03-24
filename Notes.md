@@ -1931,6 +1931,101 @@ So:
 - Rays that only hit the caps still get those hits instead of 0.
 ---------------------
 ---------------------
+
+@src/intersection.rs @src/shape.rs @src/group.rs @src 
+I’ve found the "smoking gun." The issue isn't your math—it's that your **Renderer** and your **Group** are speaking two different languages when it comes to nested transformations.
+
+### The Problem: The "Shallow" Normal
+In your `prepare_computations` function, you have this line:
+```rust
+let mut normal_v = intersection.object.normal_at(&point);
+```
+And in your `Shape` trait, the default `normal_at` is implemented like this:
+```rust
+fn normal_at(&self, world_point: &Tuple) -> Tuple {
+    let sd = self.shape_data();
+    let local_point = &sd.transform_inverse * world_point; // Only handles one level!
+    let local_normal = self.local_normal_at(&local_point);
+    let mut world_normal = &sd.transform_inverse.transpose() * &local_normal;
+    // ...
+}
+```
+
+**The Bug:** This `normal_at` function only knows about the shape's *immediate* transform. It has no idea that the shape is inside a `Group` (which has its own transform). When you render the hexagon, the cylinders are rotated/translated by the Group, but `normal_at` is only undoing the cylinder's local identity transform. This results in the "smeared" lighting and warped geometry in your blue image.
+
+### The Fix
+You actually already wrote the solution! You have a function called `shape_normal_at` that recursively walks up the parent chain, but you aren't using it in your shading loop.
+
+#### 1. Update `prepare_computations`
+You need to pass a way to resolve parents to `prepare_computations` so it can use the recursive normal logic. However, a cleaner architectural fix is to make the `Shape` trait handle the recursion.
+
+#### 2. Refactor `Shape::normal_at` (Recommended)
+Update your `Shape` trait to handle the parent recursion automatically. This way, any call to `normal_at` "just works" regardless of nesting.
+
+```rust
+// In shape.rs
+fn normal_at(&self, world_point: &Tuple, resolve_parent: &impl Fn(u64) -> Option<&dyn Shape>) -> Tuple {
+    let local_point = world_to_object(self, resolve_parent, world_point);
+    let local_normal = self.local_normal_at(&local_point);
+    normal_to_world(self, resolve_parent, &local_normal)
+}
+```
+
+### Why your "Red Segment" looked fine:
+When you rendered the single segment, it was likely at the **root** of the world (no parent). In that specific case, `world_to_object` and the simple `normal_at` are mathematically identical. The error only appears once you nest a shape inside a `Group` that has its own rotation or scale.
+
+### A Quick Rust Tip on Lifetimes
+You mentioned the `TODO` regarding `world_to_object`. The syntax:
+`resolve_parent: &impl Fn(u64) -> Option<&'a dyn Shape>`
+means: "This function takes a closure that, given an ID, returns a reference to a Shape that lives at least as long as `'a`." 
+
+Since your `Group` stores `Box<&'a dyn Shape>`, this ensures that as you walk up the parent tree, you aren't grabbing references to objects that have already been dropped from memory.
+
+---
+**Would you like me to show you how to structure a `World` or `Scene` struct to handle the `resolve_parent` closure efficiently so you don't have to pass it everywhere?**
+
+http://googleusercontent.com/interactive_content_block/0
+
+Come up with a plan to fix this in the recommended way 
+Implemented exactly the minimal fix path, with comprehensive tests, and completed all plan todos.
+
+### What I changed
+
+- **Parent-aware normals now used in shading precompute**
+  - Updated `prepare_computations` in `src/intersection.rs` to take a parent resolver and compute normals via `shape_normal_at(...)` instead of shallow `normal_at(...)`.
+
+- **Resolver threaded from world render path**
+  - In `src/world.rs`, `color_at(...)` now calls:
+    - `prepare_computations(hit, ray, &xs, &|id| world.resolve_shape(id))`
+  - Added `World::resolve_shape(id)` to resolve IDs needed by parent-chain traversal.
+
+- **Minimal recursive lookup support**
+  - Added a small optional hook in `src/shape.rs`:
+    - `find_by_id(...)` default returns `None`.
+  - Implemented recursive override in `src/group.rs` so nested group/child IDs can be resolved without redesigning your trait/lifetime architecture.
+
+- **Updated existing tests with no-parent resolver**
+  - All existing direct `prepare_computations(...)` test calls in `src/intersection.rs` and `src/world.rs` now pass a no-op resolver (`|_| None`) where grouping is irrelevant.
+
+### New regression tests added
+
+- In `src/intersection.rs`:
+  - `prepare_computations_uses_parent_aware_normal_for_child_shapes`
+  - `prepare_computations_flips_grouped_normal_when_hit_from_inside`
+
+- In `src/world.rs`:
+  - `color_at_matches_direct_transform_for_grouped_child_shape`
+    - Confirms grouped child shading matches an equivalent direct-transform sphere (integration-level guard).
+
+### Validation run
+
+- `cargo test --lib` ✅  
+  - **220 passed, 0 failed**
+- `cargo run --bin hexagon_side` ✅
+- `cargo run --bin group_hexagon` ✅  
+  - Both rendered and saved output successfully.
+
+If you want, next I can do a quick commit with a clean message focused on “fix grouped normal computation in shading path + add regression tests.”
 ---------------------
 
 ---------------------

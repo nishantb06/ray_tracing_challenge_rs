@@ -60,6 +60,18 @@ impl<'a> Shape for Group<'a> {
              use shape_normal_at(leaf, resolve, world_point) instead"
         );
     }
+
+    fn find_by_id(&self, id: u64) -> Option<&dyn Shape> {
+        if self.id() == id {
+            return Some(self);
+        }
+        for shape in &self.shapes {
+            if let Some(found) = shape.find_by_id(id) {
+                return Some(found);
+            }
+        }
+        None
+    }
 }
 
 

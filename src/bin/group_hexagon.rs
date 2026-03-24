@@ -22,7 +22,7 @@ fn hexagon_corner() -> &'static mut Sphere {
     let corner: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
     corner.set_transform(&translation(0.0, 0.0, -1.0) * &scaling(0.25, 0.25, 0.25));
     corner.material_mut().color = HEX_COLOR;
-    
+
     corner
 }
 
@@ -79,23 +79,23 @@ fn main() {
         PointLight::new(Tuple::point(10.0, 12.0, 10.0), Color::new(0.35, 0.35, 0.35)),
     
         // Mid-height rim/fill lights
-        PointLight::new(Tuple::point(-14.0, 6.0, 0.0), Color::new(0.20, 0.20, 0.20)),
-        PointLight::new(Tuple::point(14.0, 6.0, 0.0), Color::new(0.20, 0.20, 0.20)),
-        PointLight::new(Tuple::point(0.0, 6.0, -14.0), Color::new(0.20, 0.20, 0.20)),
-        PointLight::new(Tuple::point(0.0, 6.0, 14.0), Color::new(0.20, 0.20, 0.20)),
+        // PointLight::new(Tuple::point(-14.0, 6.0, 0.0), Color::new(0.20, 0.20, 0.20)),
+        // PointLight::new(Tuple::point(14.0, 6.0, 0.0), Color::new(0.20, 0.20, 0.20)),
+        // PointLight::new(Tuple::point(0.0, 6.0, -14.0), Color::new(0.20, 0.20, 0.20)),
+        // PointLight::new(Tuple::point(0.0, 6.0, 14.0), Color::new(0.20, 0.20, 0.20)),
     
-        // Low fill lights to lift shadows
-        PointLight::new(Tuple::point(-6.0, 2.0, -6.0), Color::new(0.12, 0.12, 0.12)),
-        PointLight::new(Tuple::point(6.0, 2.0, -6.0), Color::new(0.12, 0.12, 0.12)),
-        PointLight::new(Tuple::point(-6.0, 2.0, 6.0), Color::new(0.12, 0.12, 0.12)),
-        PointLight::new(Tuple::point(6.0, 2.0, 6.0), Color::new(0.12, 0.12, 0.12)),
+        // // Low fill lights to lift shadows
+        // PointLight::new(Tuple::point(-6.0, 2.0, -6.0), Color::new(0.12, 0.12, 0.12)),
+        // PointLight::new(Tuple::point(6.0, 2.0, -6.0), Color::new(0.12, 0.12, 0.12)),
+        // PointLight::new(Tuple::point(-6.0, 2.0, 6.0), Color::new(0.12, 0.12, 0.12)),
+        // PointLight::new(Tuple::point(6.0, 2.0, 6.0), Color::new(0.12, 0.12, 0.12)),
     ];
 
     world.add_shape(hexagon());
 
-    let mut camera = Camera::new(800, 500, FRAC_PI_3);
+    let mut camera = Camera::new(1000, 1000, FRAC_PI_3);
     camera.transform = view_transform(
-        &Tuple::point(0.0, 2.5, -6.0),
+        &Tuple::point(1.0, 1.25, -3.0),
         &Tuple::point(0.0, 0.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
     );

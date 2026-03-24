@@ -1,5 +1,6 @@
 use std::fmt;
 use crate::ray::Ray;
+use crate::shape::shape_normal_at;
 use crate::tuple::Tuple;
 use crate::utils::EPSILON;
 use crate::shape::Shape;
@@ -53,10 +54,11 @@ pub fn prepare_computations<'a>(
     intersection: &'a Intersection<'a>,
     ray: &Ray,
     xs: &Intersections<'a>,
+    resolve_parent: &impl Fn(u64) -> Option<&'a dyn Shape>,
 ) -> Computations<'a> {
     // existing geometric precomputations
     let point = ray.position(intersection.t);
-    let mut normal_v = intersection.object.normal_at(&point);
+    let mut normal_v = shape_normal_at(intersection.object, resolve_parent, &point);
     let eye_v = -&ray.direction;
     let mut inside = false;
 
@@ -160,6 +162,10 @@ pub fn schlick(comps: &Computations) -> f64 {
 mod tests {
     use super::*;
     use crate::sphere::Sphere;
+    
+    fn no_parent<'a>(_id: u64) -> Option<&'a dyn Shape> {
+        None
+    }
 
     #[test]
     fn an_intersection_encapsulates_t_and_object() {
@@ -227,7 +233,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let shape = Sphere::new();
         let i = Intersection::new(4.0, &shape);
-        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]), &no_parent);
         assert!(crate::utils::equal(comps.t, i.t));
         assert_eq!(comps.object.id(), i.object.id());
         assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, -1.0)));
@@ -240,7 +246,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let shape = Sphere::new();
         let i = Intersection::new(4.0, &shape);
-        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]), &no_parent);
         assert!(!comps.inside);
     }
 
@@ -249,7 +255,7 @@ mod tests {
         let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));
         let shape = Sphere::new();
         let i = Intersection::new(1.0, &shape);
-        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]), &no_parent);
         assert!(comps.point.is_equal(&Tuple::point(0.0, 0.0, 1.0)));
         assert!(comps.eye_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
         assert!(comps.inside);
@@ -277,7 +283,7 @@ mod tests {
         let i = Intersection::new(std::f64::consts::SQRT_2, &shape);
 
         // comps ← prepare_computations(i, r)
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
 
         // Then comps.reflectv = vector(0, √2/2, √2/2)
         let expected = Tuple::vector(
@@ -344,7 +350,7 @@ mod tests {
     
         for (index, expected_n1, expected_n2) in examples {
             let i = &xs.data[index];
-            let comps = prepare_computations(i, &r, &xs);
+            let comps = prepare_computations(i, &r, &xs, &no_parent);
             assert!(
                 crate::utils::equal(comps.n1, expected_n1),
                 "index {}: expected n1 = {}, got {}",
@@ -385,7 +391,7 @@ mod tests {
         let xs = Intersections::new(vec![i]);
     
         // When comps ← prepare_computations(i, r, xs)
-        let comps = prepare_computations(&xs.data[0], &r, &xs);
+        let comps = prepare_computations(&xs.data[0], &r, &xs, &no_parent);
     
         // Then comps.under_point.z > EPSILON/2
         assert!(comps.under_point.z > EPSILON / 2.0);
@@ -417,7 +423,7 @@ mod tests {
         ]);
 
         // When comps ← prepare_computations(xs[1], r, xs)
-        let comps = prepare_computations(&xs.data[1], &r, &xs);
+        let comps = prepare_computations(&xs.data[1], &r, &xs, &no_parent);
 
         // And reflectance ← schlick(comps)
         let reflectance = schlick(&comps);
@@ -448,7 +454,7 @@ mod tests {
         ]);
     
         // When comps ← prepare_computations(xs[1], r, xs)
-        let comps = prepare_computations(&xs.data[1], &r, &xs);
+        let comps = prepare_computations(&xs.data[1], &r, &xs, &no_parent);
     
         // And reflectance ← schlick(comps)
         let reflectance = schlick(&comps);
@@ -478,12 +484,102 @@ mod tests {
         ]);
     
         // When comps ← prepare_computations(xs[0], r, xs)
-        let comps = prepare_computations(&xs.data[0], &r, &xs);
+        let comps = prepare_computations(&xs.data[0], &r, &xs, &no_parent);
     
         // And reflectance ← schlick(comps)
         let reflectance = schlick(&comps);
     
         // Then reflectance = 0.48873
         assert!(crate::utils::equal(reflectance, 0.48873));
-    }    
+    }
+
+    #[test]
+    fn prepare_computations_uses_parent_aware_normal_for_child_shapes() {
+        use crate::group::Group;
+        use crate::shape::shape_normal_at;
+        use crate::transformation::{rotation_y, scaling, translation};
+        use std::f64::consts::FRAC_PI_2;
+
+        let mut g1 = Group::new();
+        g1.set_transform(rotation_y(FRAC_PI_2));
+
+        let mut g2 = Group::new();
+        g2.set_transform(scaling(1.0, 2.0, 3.0));
+
+        let mut s = Sphere::new();
+        s.set_transform(translation(5.0, 0.0, 0.0));
+
+        s.shape_data_mut().parent = Some(g2.id());
+        g2.add_child(&s);
+
+        g2.shape_data_mut().parent = Some(g1.id());
+        g1.add_child(&g2);
+
+        let resolve = |id: u64| -> Option<&dyn Shape> {
+            if id == g1.id() {
+                Some(&g1 as &dyn Shape)
+            } else if id == g2.id() {
+                Some(&g2 as &dyn Shape)
+            } else if id == s.id() {
+                Some(&s as &dyn Shape)
+            } else {
+                None
+            }
+        };
+
+        let p = Tuple::point(1.7321, 1.1547, -5.5774);
+        let r = Ray::new(p.clone(), Tuple::vector(0.0, 0.0, 1.0));
+        let i = Intersection::new(0.0, &s);
+        let xs = Intersections::new(vec![i.clone()]);
+        let comps = prepare_computations(&i, &r, &xs, &resolve);
+        let expected = shape_normal_at(&s, &resolve, &p);
+
+        assert!(comps.normal_vector.is_equal(&expected));
+        assert!(!comps.inside);
+    }
+
+    #[test]
+    fn prepare_computations_flips_grouped_normal_when_hit_from_inside() {
+        use crate::group::Group;
+        use crate::shape::shape_normal_at;
+        use crate::transformation::{rotation_y, scaling, translation};
+        use std::f64::consts::FRAC_PI_2;
+
+        let mut g1 = Group::new();
+        g1.set_transform(rotation_y(FRAC_PI_2));
+
+        let mut g2 = Group::new();
+        g2.set_transform(scaling(1.0, 2.0, 3.0));
+
+        let mut s = Sphere::new();
+        s.set_transform(translation(5.0, 0.0, 0.0));
+
+        s.shape_data_mut().parent = Some(g2.id());
+        g2.add_child(&s);
+
+        g2.shape_data_mut().parent = Some(g1.id());
+        g1.add_child(&g2);
+
+        let resolve = |id: u64| -> Option<&dyn Shape> {
+            if id == g1.id() {
+                Some(&g1 as &dyn Shape)
+            } else if id == g2.id() {
+                Some(&g2 as &dyn Shape)
+            } else if id == s.id() {
+                Some(&s as &dyn Shape)
+            } else {
+                None
+            }
+        };
+
+        let p = Tuple::point(1.7321, 1.1547, -5.5774);
+        let r = Ray::new(p.clone(), Tuple::vector(0.0, 0.0, -1.0));
+        let i = Intersection::new(0.0, &s);
+        let xs = Intersections::new(vec![i.clone()]);
+        let comps = prepare_computations(&i, &r, &xs, &resolve);
+        let expected = -&shape_normal_at(&s, &resolve, &p);
+
+        assert!(comps.normal_vector.is_equal(&expected));
+        assert!(comps.inside);
+    }
 }

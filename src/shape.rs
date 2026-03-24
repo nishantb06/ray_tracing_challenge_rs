@@ -64,6 +64,9 @@ pub trait Shape: Debug {
     fn material(&self) -> &Material { &self.shape_data().material }
     fn material_mut(&mut self) -> &mut Material { &mut self.shape_data_mut().material }
     fn set_transform(&mut self, t: Matrix) { self.shape_data_mut().set_transform(t); }
+    fn find_by_id(&self, _id: u64) -> Option<&dyn Shape> {
+        None
+    }
 }
 
 /// Recursively convert a **world-space** point into `shape`'s object space.

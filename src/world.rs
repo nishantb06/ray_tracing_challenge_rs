@@ -55,6 +55,18 @@ impl World {
         Intersections::new(all)
     }
 
+    pub fn resolve_shape(&self, id: u64) -> Option<&dyn Shape> {
+        for object in &self.objects {
+            if object.id() == id {
+                return Some(object.as_ref());
+            }
+            if let Some(found) = object.find_by_id(id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
     pub fn is_shadowed_light(&self, p: Tuple, light: &PointLight) -> bool {
         let v = &light.position - &p;
         let magnitude = v.magnitude();
@@ -111,7 +123,7 @@ pub fn color_at(world: &World, ray: &Ray, remaining: i32) -> Color {
     match xs.hit() {
         None => Color::new(0.0, 0.0, 0.0),
         Some(hit) => {
-            let comps = prepare_computations(hit, ray, &xs);
+            let comps = prepare_computations(hit, ray, &xs, &|id| world.resolve_shape(id));
             shade_hit(world, &comps, remaining)
         }
     }
@@ -176,10 +188,15 @@ pub fn refracted_color(world: &World, comps: &Computations, remaining: i32) -> C
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::group::Group;
     use crate::plane::Plane;
     use crate::ray::Ray;
-    use crate::transformation::translation;
+    use crate::transformation::{scaling, translation};
     use crate::utils::MAX_RECURSION_DEPTH;
+    
+    fn no_parent<'a>(_id: u64) -> Option<&'a dyn Shape> {
+        None
+    }
 
     #[test]
     fn creating_a_world() {
@@ -226,7 +243,7 @@ mod tests {
         let w = World::default_world();
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let i = Intersection::new(4.0, w.objects[0].as_ref());
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
         let c = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
         assert!(c.is_equal(&Color::new(0.38066, 0.47583, 0.2855)));
     }
@@ -240,7 +257,7 @@ mod tests {
         )];
         let r = Ray::new(Tuple::point(0.0, 0.0, 0.0), Tuple::vector(0.0, 0.0, 1.0));
         let i = Intersection::new(0.5, w.objects[1].as_ref());
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
         let c = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
         assert!(c.is_equal(&Color::new(0.90498, 0.90498, 0.90498)));
     }
@@ -350,7 +367,7 @@ mod tests {
         w.add_shape(s2);
         let r = Ray::new(Tuple::point(0.0, 0.0, 5.0), Tuple::vector(0.0, 0.0, 1.0));
         let i = Intersection::new(4.0, w.objects[1].as_ref());
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
         let c = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
         assert!(c.is_equal(&Color::new(0.1, 0.1, 0.1)));
     }
@@ -368,7 +385,7 @@ mod tests {
         w.add_shape(s2);
         let r = Ray::new(Tuple::point(0.0, 0.0, 5.0), Tuple::vector(0.0, 0.0, 1.0));
         let i = Intersection::new(4.0, w.objects[1].as_ref());
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
         let c = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
         assert!(c.is_equal(&Color::new(2.0, 2.0, 2.0)));
     }
@@ -379,7 +396,7 @@ mod tests {
         shape.set_transform(translation(0.0, 0.0, 1.0));
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let i = Intersection::new(5.0, &shape as &dyn Shape);
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
         assert!(comps.over_point.z < -crate::utils::EPSILON / 2.0);
         assert!(comps.point.z > comps.over_point.z);
     }
@@ -404,7 +421,7 @@ mod tests {
         let i = Intersection::new(1.0, shape);
 
         // When comps ← prepare_computations(i, r)
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
 
         // And color ← reflected_color(w, comps)
         let color = reflected_color(&w, &comps, MAX_RECURSION_DEPTH);
@@ -441,7 +458,7 @@ mod tests {
         // And i ← intersection(√2, shape)
         let i = Intersection::new(std::f64::consts::SQRT_2, shape_ref);
 
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
         let color = reflected_color(&w, &comps, MAX_RECURSION_DEPTH);
         let expected = Color::new(0.1903323, 0.237915, 0.142749);
         assert!(color.is_equal(&expected));
@@ -479,7 +496,7 @@ mod tests {
         let i = Intersection::new(std::f64::consts::SQRT_2, shape_ref);
 
         // When comps ← prepare_computations(i, r)
-        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]), &no_parent);
 
         // And color ← shade_hit(w, comps)
         let color = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
@@ -555,7 +572,7 @@ mod tests {
         let i = Intersection::new(std::f64::consts::SQRT_2, shape_ref);
 
         // When comps ← prepare_computations(i, r)
-        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]));
+        let comps = prepare_computations(&i, &r,&Intersections::new(vec![i.clone()]), &no_parent);
 
         // And color ← reflected_color(w, comps, 0)
         let color = reflected_color(&w, &comps, 0);
@@ -585,7 +602,7 @@ mod tests {
         let xs = Intersections::new(vec![i1, i2]);
     
         // When comps ← prepare_computations(xs[0], r, xs)
-        let comps = prepare_computations(&xs.data[0], &r, &xs);
+        let comps = prepare_computations(&xs.data[0], &r, &xs, &no_parent);
     
         // And c ← refracted_color(w, comps, 5)
         let c = refracted_color(&w, &comps, 5);
@@ -622,7 +639,7 @@ mod tests {
         let xs = Intersections::new(vec![i1, i2]);
     
         // When comps ← prepare_computations(xs[0], r, xs)
-        let comps = prepare_computations(&xs.data[0], &r, &xs);
+        let comps = prepare_computations(&xs.data[0], &r, &xs, &no_parent);
     
         // And c ← refracted_color(w, comps, 0)
         let c = refracted_color(&w, &comps, 0);
@@ -661,7 +678,7 @@ mod tests {
         let xs = Intersections::new(vec![i1, i2]);
 
         // When comps ← prepare_computations(xs[1], r, xs)
-        let comps = prepare_computations(&xs.data[1], &r, &xs);
+        let comps = prepare_computations(&xs.data[1], &r, &xs, &no_parent);
 
         // And c ← refracted_color(w, comps, 5)
         let c = refracted_color(&w, &comps, 5);
@@ -711,7 +728,7 @@ mod tests {
         ]);
 
         // When comps ← prepare_computations(xs[2], r, xs)
-        let comps = prepare_computations(&xs.data[2], &r, &xs);
+        let comps = prepare_computations(&xs.data[2], &r, &xs, &no_parent);
 
         // And c ← refracted_color(w, comps, 5)
         let c = refracted_color(&w, &comps, 5);
@@ -779,7 +796,7 @@ mod tests {
         let xs = Intersections::new(vec![i]);
 
         // When comps ← prepare_computations(xs[0], r, xs)
-        let comps = prepare_computations(&xs.data[0], &r, &xs);
+        let comps = prepare_computations(&xs.data[0], &r, &xs, &no_parent);
 
         // And color ← shade_hit(w, comps, 5)
         let color = shade_hit(&w, &comps, 5);
@@ -850,7 +867,7 @@ mod tests {
         let xs = Intersections::new(vec![i]);
     
         // When comps ← prepare_computations(xs[0], r, xs)
-        let comps = prepare_computations(&xs.data[0], &r, &xs);
+        let comps = prepare_computations(&xs.data[0], &r, &xs, &no_parent);
     
         // And color ← shade_hit(w, comps, 5)
         let color = shade_hit(&w, &comps, 5);
@@ -858,6 +875,47 @@ mod tests {
         // Then color = color(0.93391, 0.69643, 0.69243)
         let expected = Color::new(0.93391, 0.69643, 0.69243);
         assert!(color.is_equal(&expected));
+    }
+
+    #[test]
+    fn color_at_matches_direct_transform_for_grouped_child_shape() {
+        let mut grouped_world = World::new();
+        grouped_world.lights = vec![PointLight::new(
+            Tuple::point(-10.0, 10.0, -10.0),
+            Color::new(1.0, 1.0, 1.0),
+        )];
+
+        let mut group = Group::new();
+        let group_transform = scaling(1.0, 0.5, 1.0);
+        group.set_transform(group_transform.clone());
+
+        let child_transform = translation(0.0, 0.0, 1.0);
+        let child: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+        child.set_transform(child_transform.clone());
+        child.material_mut().color = Color::new(0.2, 0.8, 1.0);
+        child.material_mut().diffuse = 0.7;
+        child.material_mut().specular = 0.3;
+        child.shape_data_mut().parent = Some(group.id());
+        group.add_child(child);
+        grouped_world.add_shape(group);
+
+        let mut direct_world = World::new();
+        direct_world.lights = vec![PointLight::new(
+            Tuple::point(-10.0, 10.0, -10.0),
+            Color::new(1.0, 1.0, 1.0),
+        )];
+        let mut direct_sphere = Sphere::new();
+        direct_sphere.set_transform(&group_transform * &child_transform);
+        direct_sphere.material_mut().color = Color::new(0.2, 0.8, 1.0);
+        direct_sphere.material_mut().diffuse = 0.7;
+        direct_sphere.material_mut().specular = 0.3;
+        direct_world.add_shape(direct_sphere);
+
+        let ray = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let grouped_color = color_at(&grouped_world, &ray, MAX_RECURSION_DEPTH);
+        let direct_color = color_at(&direct_world, &ray, MAX_RECURSION_DEPTH);
+
+        assert!(grouped_color.is_equal(&direct_color));
     }
 
     #[test]
