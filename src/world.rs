@@ -55,8 +55,8 @@ impl World {
         Intersections::new(all)
     }
 
-    pub fn is_shadowed(&self, p: Tuple) -> bool {
-        let v = &self.lights[0].position - &p;
+    pub fn is_shadowed_light(&self, p: Tuple, light: &PointLight) -> bool {
+        let v = &light.position - &p;
         let magnitude = v.magnitude();
         let direction = v.normalize();
         let ray = Ray::new(p, direction);
@@ -64,16 +64,24 @@ impl World {
         let hit = xs.hit();
         hit.is_some() && hit.unwrap().t < magnitude
     }
+
+    pub fn is_shadowed(&self, p: Tuple) -> bool {
+        if self.lights.is_empty() {
+            return false;
+        }
+        self.lights
+            .iter()
+            .all(|light| self.is_shadowed_light(p.clone(), light))
+    }
 }
 
 pub fn shade_hit(world: &World, comps: &Computations, remaining: i32) -> Color {
-    let shadowed = world.is_shadowed(comps.over_point.clone());
-
     // surface ← lighting(...)
     let surface = world
         .lights
         .iter()
         .fold(Color::new(0.0, 0.0, 0.0), |acc, light| {
+            let shadowed = world.is_shadowed_light(comps.over_point.clone(), light);
             let c = lighting(
                 comps.object.material(),
                 comps.object,
@@ -290,6 +298,46 @@ mod tests {
     }
 
     #[test]
+    fn is_shadowed_for_light_returns_false_when_path_clear() {
+        let mut w = World::new();
+        w.add_shape(Sphere::new());
+        let p = Tuple::point(0.0, 0.0, -3.0);
+        let light = PointLight::new(Tuple::point(0.0, 10.0, -3.0), Color::new(1.0, 1.0, 1.0));
+        assert!(!w.is_shadowed_light(p, &light));
+    }
+
+    #[test]
+    fn is_shadowed_for_light_returns_true_when_occluded() {
+        let mut w = World::new();
+        w.add_shape(Sphere::new());
+        let p = Tuple::point(0.0, 0.0, -3.0);
+        let light = PointLight::new(Tuple::point(0.0, 0.0, 3.0), Color::new(1.0, 1.0, 1.0));
+        assert!(w.is_shadowed_light(p, &light));
+    }
+
+    #[test]
+    fn is_shadowed_returns_false_when_at_least_one_light_is_visible() {
+        let mut w = World::new();
+        w.add_shape(Sphere::new());
+        w.lights = vec![
+            PointLight::new(Tuple::point(0.0, 10.0, -3.0), Color::new(1.0, 1.0, 1.0)),
+            PointLight::new(Tuple::point(0.0, 0.0, 3.0), Color::new(1.0, 1.0, 1.0)),
+        ];
+        assert!(!w.is_shadowed(Tuple::point(0.0, 0.0, -3.0)));
+    }
+
+    #[test]
+    fn is_shadowed_returns_true_when_all_lights_are_occluded() {
+        let mut w = World::new();
+        w.add_shape(Sphere::new());
+        w.lights = vec![
+            PointLight::new(Tuple::point(0.0, 0.0, 3.0), Color::new(1.0, 1.0, 1.0)),
+            PointLight::new(Tuple::point(0.0, 0.0, 6.0), Color::new(1.0, 1.0, 1.0)),
+        ];
+        assert!(w.is_shadowed(Tuple::point(0.0, 0.0, -3.0)));
+    }
+
+    #[test]
     fn shade_hit_given_an_intersection_in_shadow() {
         let mut w = World::new();
         w.lights = vec![PointLight::new(
@@ -305,6 +353,24 @@ mod tests {
         let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
         let c = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
         assert!(c.is_equal(&Color::new(0.1, 0.1, 0.1)));
+    }
+
+    #[test]
+    fn shade_hit_with_mixed_light_visibility_uses_per_light_shadowing() {
+        let mut w = World::new();
+        w.lights = vec![
+            PointLight::new(Tuple::point(0.0, 0.0, -10.0), Color::new(1.0, 1.0, 1.0)),
+            PointLight::new(Tuple::point(0.0, 0.0, 5.0), Color::new(1.0, 1.0, 1.0)),
+        ];
+        w.add_shape(Sphere::new());
+        let mut s2 = Sphere::new();
+        s2.set_transform(translation(0.0, 0.0, 10.0));
+        w.add_shape(s2);
+        let r = Ray::new(Tuple::point(0.0, 0.0, 5.0), Tuple::vector(0.0, 0.0, 1.0));
+        let i = Intersection::new(4.0, w.objects[1].as_ref());
+        let comps = prepare_computations(&i, &r, &Intersections::new(vec![i.clone()]));
+        let c = shade_hit(&w, &comps, MAX_RECURSION_DEPTH);
+        assert!(c.is_equal(&Color::new(2.0, 2.0, 2.0)));
     }
 
     #[test]
@@ -792,5 +858,26 @@ mod tests {
         // Then color = color(0.93391, 0.69643, 0.69243)
         let expected = Color::new(0.93391, 0.69643, 0.69243);
         assert!(color.is_equal(&expected));
+    }
+
+    #[test]
+    fn is_shadowed_is_false_when_at_least_one_light_is_visible() {
+        let mut w = World::new();
+        // One simple sphere in the scene
+        w.add_shape(Sphere::new());
+        // First light is visible from p, second is blocked by the sphere.
+        w.lights = vec![
+            PointLight::new(
+                Tuple::point(0.0, 10.0, -3.0),
+                Color::new(1.0, 1.0, 1.0),
+            ),
+            PointLight::new(
+                Tuple::point(0.0, 0.0, 3.0),
+                Color::new(1.0, 1.0, 1.0),
+            ),
+        ];
+        let p = Tuple::point(0.0, 0.0, -3.0);
+        // Expected: false for aggregate semantics ("all lights blocked" only).
+        assert!(!w.is_shadowed(p));
     }
 }
