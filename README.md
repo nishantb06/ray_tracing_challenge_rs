@@ -75,6 +75,7 @@ cargo run --bin ppm_to_png -- media/images_ppm/cover_scene.ppm media/images/cove
 | Embedded sphere | ![Embedded sphere](media/images/embedded_sphere.png) |
 | Cone and Cylinder | ![Cone and Cylinder](media/images/cone_and_cylinder.png) |
 | Hexagon rendered with Groups| ![Hexagon rendered with Groups](media/images/group_hexagon.png) |
+| Dodecahedron, rendered with triangles | ![Dodecahedron](media/images/dodecahedron.png) |
 
 Additional renders are available in `media/images/`.
 
