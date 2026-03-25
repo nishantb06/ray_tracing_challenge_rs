@@ -5,6 +5,9 @@ use crate::ray::Ray;
 use crate::shape::{Shape, ShapeData};
 use crate::tuple::Tuple;
 
+/// Hierarchical shape: transforms apply to all children. Children are stored as `&'static` trait
+/// object references (typically `Box::leak`’d primitives or nested groups). Triangles, spheres,
+/// cylinders, etc. all work as children as long as `parent` is set for parent-aware normals.
 #[derive(Debug)]
 pub struct Group<'a> {
     pub data: ShapeData,
@@ -157,6 +160,28 @@ mod tests {
     
         assert_eq!(xs.count(), 2);
     }
+
+    #[test]
+    fn transformed_group_intersects_leaked_triangle_children() {
+        use crate::transformation::{rotation_y, translation};
+        use crate::triangle::Triangle;
+
+        let mut g = Group::new();
+        g.set_transform(&rotation_y(0.35) * &translation(0.0, 0.0, 0.25));
+
+        let tri: &'static mut Triangle = Box::leak(Box::new(Triangle::new(
+            Tuple::point(0.0, 1.0, 0.0),
+            Tuple::point(-1.0, 0.0, 0.0),
+            Tuple::point(1.0, 0.0, 0.0),
+        )));
+        tri.shape_data_mut().parent = Some(g.id());
+        g.add_child(tri);
+
+        let r = Ray::new(Tuple::point(0.0, 0.5, -4.0), Tuple::vector(0.0, 0.0, 1.0));
+        let xs = g.intersect(&r);
+        assert!(xs.count() >= 1, "expected at least one hit through group + triangle");
+    }
 }
 
 // TODO: Go read about lifetimes and see why they are important here , for example why does the local_intersect have a different lifetime param?
+// TODO: Read about leaked Box pointers why they are important here ?

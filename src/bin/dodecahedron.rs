@@ -1,10 +1,11 @@
 use ray_tracing_challenge_rs::camera::Camera;
 use ray_tracing_challenge_rs::canvas::Color;
+use ray_tracing_challenge_rs::group::Group;
 use ray_tracing_challenge_rs::light::PointLight;
 use ray_tracing_challenge_rs::material::Material;
 use ray_tracing_challenge_rs::shape::Shape;
 use ray_tracing_challenge_rs::sphere::Sphere;
-use ray_tracing_challenge_rs::transformation::{scaling, view_transform};
+use ray_tracing_challenge_rs::transformation::{rotation_y, scaling, translation, view_transform};
 use ray_tracing_challenge_rs::triangle::Triangle;
 use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
@@ -56,20 +57,6 @@ const DODECA_INDEX: &[usize] = &[
     11, 9, 5, 11, 5, 19, 11, 19, 7, 19, 5, 14, 19, 14, 4, 19, 4, 17, 1, 12, 14, 1, 14, 5, 1, 5, 9,
 ];
 
-fn add_triangle(world: &mut World, p1: Tuple, p2: Tuple, p3: Tuple, color: Color) {
-    let mut tri = Triangle::new(p1, p2, p3);
-    {
-        let m = tri.material_mut();
-        *m = Material::new();
-        m.color = color;
-        m.ambient = 0.09;
-        m.diffuse = 0.82;
-        m.specular = 0.35;
-        m.shininess = 80.0;
-    }
-    world.add_shape(tri);
-}
-
 fn main() {
     let mut world = World::new();
 
@@ -89,20 +76,38 @@ fn main() {
     let gold = Color::new(0.78, 0.62, 0.28);
     let gold_dark = Color::new(0.58, 0.44, 0.22);
 
-    for (i, tri) in DODECA_INDEX.chunks_exact(3).enumerate() {
+    // All mesh triangles live under one group so we can transform the whole solid.
+    let mut dodeca: Group<'static> = Group::new();
+    dodeca.set_transform(
+        &( &rotation_y(0.55) * &translation(0.0, -0.12, 0.0) ) * &scaling(1.05, 1.05, 1.05),
+    );
+
+    for (i, tri_idx) in DODECA_INDEX.chunks_exact(3).enumerate() {
         let c = if (i / 3) % 2 == 0 {
             gold.clone()
         } else {
             gold_dark.clone()
         };
-        add_triangle(
-            &mut world,
-            verts[tri[0]].clone(),
-            verts[tri[1]].clone(),
-            verts[tri[2]].clone(),
-            c,
-        );
+
+        let t: &'static mut Triangle = Box::leak(Box::new(Triangle::new(
+            verts[tri_idx[0]].clone(),
+            verts[tri_idx[1]].clone(),
+            verts[tri_idx[2]].clone(),
+        )));
+        {
+            let m = t.material_mut();
+            *m = Material::new();
+            m.color = c;
+            m.ambient = 0.09;
+            m.diffuse = 0.82;
+            m.specular = 0.35;
+            m.shininess = 80.0;
+        }
+        t.shape_data_mut().parent = Some(dodeca.id());
+        dodeca.add_child(t);
     }
+
+    world.add_shape(dodeca);
 
     world.lights = vec![PointLight::new(
         Tuple::point(-6.0, 10.0, -5.0),
