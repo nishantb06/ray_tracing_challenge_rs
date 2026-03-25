@@ -283,3 +283,41 @@ cargo run --bin ppm_to_png -- media/images/cover_scene.ppm media/images/cover_sc
 
 Note that the extents are exclusive, meaning if the cylinder is truncated at
 y=2, the cylinder extends up to—but not including—that limit.
+
+
+**You’re already aligned with the book.** The implementation keeps a **sentinel at `vertices[0]`** and appends real positions so the first `v` line is `vertices[1]`, the second is `vertices[2]`, etc.:
+
+```3:22:src/obj_file.rs
+/// OBJ vertex list uses 1-based indices in the file format; `vertices[0]` is an unused slot.
+#[derive(Debug, PartialEq)]
+pub struct ObjParser {
+    pub ignored_lines: usize,
+    pub vertices: Vec<Tuple>,
+}
+// ...
+    // Index 0 unused (matches OBJ / book 1-based indexing)
+    let mut vertices = vec![Tuple::point(0.0, 0.0, 0.0)];
+```
+
+When you add **`f`** handling, you can parse indices as integers (possibly `i/j/k` triples) and use **`vertices[i]`** directly for positive indices **without** `i - 1`. For negative OBJ indices (relative to the end of the list), you’d need a separate rule—the book’s tests usually stick to small positive indices first.
+
+So: **1-based in the file → your `Vec` is “1-based” by convention, with index 0 unused.** No change required unless you want to rename or add a tiny helper like `fn vertex(&self, obj_index: usize) -> &Tuple` that debug-asserts `obj_index >= 1` for clarity.
+
+
+Here’s what was implemented:
+
+### Behavior
+- **`f` lines** — Expects three face corners; each token uses the **first integer** before `/` so `f 1/2/3 4/5/6 7/8/9` works later. Indices are **1-based** and index directly into `vertices`.
+- **`default_group`** — A `Group<'static>` created at parse start; every triangle is **`Box::leak`**’d (same pattern as `group.rs` tests), **`parent`** is set to the group’s id, then **`add_child`**.
+- **`triangle_children()`** — Returns `&[&'static Triangle]` in file order, matching `default_group.shapes` (the test checks matching shape ids).
+- **`Shape` import** — Needed for `shape_data_mut()` and `id()`.
+
+### Files
+- `src/obj_file.rs` — `ObjParser` now holds `default_group`, internal `triangle_refs`, `triangle_children()`, `parse_face_vertex_index`, and `parsing_triangle_faces` test.
+- Removed **`PartialEq`** on `ObjParser` (group + leaked triangles make equality awkward).
+
+### Note
+Triangles are leaked on purpose so they can live as `&'static dyn Shape` children of `Group<'static>` without a self-referential `ObjParser`. For long-lived scenes you could later switch to an owned representation (e.g. `Vec<Box<Triangle>>` + a different group API).
+
+
+Noting World::add_shape requires Shape + 'static, while obj_to_group(&parser) returns Group<'_> tied to the parser borrow. Leaking the parser with Box::leak yields a 'static root group. Adding apply_material_to_all_triangles in obj_file.rs (unsafe field copy) because we can't mutably borrow triangles through the existing API.

@@ -2028,6 +2028,20 @@ Implemented exactly the minimal fix path, with comprehensive tests, and complete
 If you want, next I can do a quick commit with a clean message focused on “fix grouped normal computation in shading path + add regression tests.”
 ---------------------
 
+Here’s what was implemented:
+
+### Behavior
+- **`f` lines** — Expects three face corners; each token uses the **first integer** before `/` so `f 1/2/3 4/5/6 7/8/9` works later. Indices are **1-based** and index directly into `vertices`.
+- **`default_group`** — A `Group<'static>` created at parse start; every triangle is **`Box::leak`**’d (same pattern as `group.rs` tests), **`parent`** is set to the group’s id, then **`add_child`**.
+- **`triangle_children()`** — Returns `&[&'static Triangle]` in file order, matching `default_group.shapes` (the test checks matching shape ids).
+- **`Shape` import** — Needed for `shape_data_mut()` and `id()`.
+
+### Files
+- `src/obj_file.rs` — `ObjParser` now holds `default_group`, internal `triangle_refs`, `triangle_children()`, `parse_face_vertex_index`, and `parsing_triangle_faces` test.
+- Removed **`PartialEq`** on `ObjParser` (group + leaked triangles make equality awkward).
+
+### Note
+Triangles are leaked on purpose so they can live as `&'static dyn Shape` children of `Group<'static>` without a self-referential `ObjParser`. For long-lived scenes you could later switch to an owned representation (e.g. `Vec<Box<Triangle>>` + a different group API).
 ---------------------
 ---------------------
 
