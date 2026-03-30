@@ -76,6 +76,7 @@ cargo run --bin ppm_to_png -- media/images_ppm/cover_scene.ppm media/images/cove
 | Cone and Cylinder | ![Cone and Cylinder](media/images/cone_and_cylinder.png) |
 | Hexagon rendered with Groups| ![Hexagon rendered with Groups](media/images/group_hexagon.png) |
 | Dodecahedron, rendered with triangles | ![Dodecahedron](media/images/dodecahedron.png) |
+| Football (truncated icosahedron) | ![Dodecahedron](media/images/football.png) |
 
 Additional renders are available in `media/images/`.
 
