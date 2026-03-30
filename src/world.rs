@@ -884,37 +884,39 @@ mod tests {
             Tuple::point(-10.0, 10.0, -10.0),
             Color::new(1.0, 1.0, 1.0),
         )];
-
+    
         let mut group = Group::new();
         let group_transform = scaling(1.0, 0.5, 1.0);
         group.set_transform(group_transform.clone());
-
+    
         let child_transform = translation(0.0, 0.0, 1.0);
-        let child: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+        let mut child = Sphere::new(); // owned (no leak needed)
         child.set_transform(child_transform.clone());
         child.material_mut().color = Color::new(0.2, 0.8, 1.0);
         child.material_mut().diffuse = 0.7;
         child.material_mut().specular = 0.3;
-        child.shape_data_mut().parent = Some(group.id());
-        group.add_child(child);
+        // child.shape_data_mut().parent = Some(group.id()); // no need anymore after new change
+    
+        group.add_child(Box::new(child)); // Box<Sphere> -> Box<dyn Shape>
         grouped_world.add_shape(group);
-
+    
         let mut direct_world = World::new();
         direct_world.lights = vec![PointLight::new(
             Tuple::point(-10.0, 10.0, -10.0),
             Color::new(1.0, 1.0, 1.0),
         )];
+    
         let mut direct_sphere = Sphere::new();
         direct_sphere.set_transform(&group_transform * &child_transform);
         direct_sphere.material_mut().color = Color::new(0.2, 0.8, 1.0);
         direct_sphere.material_mut().diffuse = 0.7;
         direct_sphere.material_mut().specular = 0.3;
         direct_world.add_shape(direct_sphere);
-
+    
         let ray = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let grouped_color = color_at(&grouped_world, &ray, MAX_RECURSION_DEPTH);
         let direct_color = color_at(&direct_world, &ray, MAX_RECURSION_DEPTH);
-
+    
         assert!(grouped_color.is_equal(&direct_color));
     }
 

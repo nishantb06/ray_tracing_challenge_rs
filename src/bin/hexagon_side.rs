@@ -12,8 +12,8 @@ use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 
-fn hexagon_corner() -> &'static mut Sphere {
-    let corner: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+fn hexagon_corner() -> Sphere {
+    let mut corner = Sphere::new();
     corner.set_transform(
         &translation(0.0, 0.0, -1.0) * &scaling(0.25, 0.25, 0.25),
     );
@@ -21,8 +21,8 @@ fn hexagon_corner() -> &'static mut Sphere {
     corner
 }
 
-fn hexagon_edge() -> &'static mut Cylinder {
-    let edge: &'static mut Cylinder = Box::leak(Box::new(Cylinder::new()));
+fn hexagon_edge() -> Cylinder {
+    let mut edge = Cylinder::new();
     edge.minimum = 0.0;
     edge.maximum = 1.0;
     edge.set_transform(
@@ -34,16 +34,12 @@ fn hexagon_edge() -> &'static mut Cylinder {
     edge
 }
 
-fn hexagon_side() -> Group<'static> {
+fn hexagon_side() -> Group {
     let mut side = Group::new();
 
-    let corner = hexagon_corner();
-    corner.shape_data_mut().parent = Some(side.id());
-    side.add_child(corner);
+    side.add_child(Box::new(hexagon_corner()));
 
-    let edge = hexagon_edge();
-    edge.shape_data_mut().parent = Some(side.id());
-    side.add_child(edge);
+    side.add_child(Box::new(hexagon_edge()));
 
     side
 }

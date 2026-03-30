@@ -11,7 +11,7 @@ use std::f64::consts::FRAC_PI_3;
 
 fn main() {
     // 1) One sphere (leaked so Group can hold a 'static reference)
-    let sphere: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut sphere: Sphere = Sphere::new();
     sphere.material_mut().color = Color::new(0.2, 0.8, 1.0);
     sphere.material_mut().diffuse = 0.7;
     sphere.material_mut().specular = 0.3;
@@ -20,7 +20,7 @@ fn main() {
     let mut group = Group::new();
     // Optional parent linkage (useful when you later rely on parent-chain normal helpers)
     sphere.shape_data_mut().parent = Some(group.id());
-    group.add_child(sphere);
+    group.add_child(Box::new(sphere));
 
     // 3) Build world
     let mut world = World::new();

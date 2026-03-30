@@ -1,3 +1,5 @@
 /target
 *.ppm
 .DS_Store
+files/
+*.obj

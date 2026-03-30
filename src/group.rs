@@ -5,17 +5,16 @@ use crate::ray::Ray;
 use crate::shape::{Shape, ShapeData};
 use crate::tuple::Tuple;
 
-/// Hierarchical shape: transforms apply to all children. Children are stored as `&'static` trait
-/// object references (typically `Box::leak`’d primitives or nested groups). Triangles, spheres,
-/// cylinders, etc. all work as children as long as `parent` is set for parent-aware normals.
+
 #[derive(Debug)]
-pub struct Group<'a> {
+pub struct Group {
     pub data: ShapeData,
-    pub shapes: Vec<Box<&'a dyn Shape>>, // TODO: we can make this a HashSet as well
+    pub shapes: Vec<Box<dyn Shape>>, // TODO: we can make this a HashSet as well
     pub ids: HashSet<u64>,
 }
 
-impl<'a> Group<'a> {
+
+impl Group {
     pub fn new() -> Self {
         Group {
             data: ShapeData::new(),
@@ -28,17 +27,20 @@ impl<'a> Group<'a> {
         self.shapes.len()
     }
 
-    pub fn add_child(&mut self, shape: &'a dyn Shape) {
+    pub fn add_child(&mut self, mut shape: Box<dyn Shape>) {
+        let parent_id = self.id(); // avoid borrow conflicts
+    
+        shape.shape_data_mut().parent = Some(parent_id);
         self.ids.insert(shape.id());
-        self.shapes.push(Box::new(shape));
+        self.shapes.push(shape);
     }
 
-    pub fn includes(&self, shape: &dyn Shape) -> bool {
-        self.ids.contains(&shape.id())
+    pub fn includes(&self, id: u64) -> bool {
+        self.ids.contains(&id)
     }
 }
 
-impl<'a> Shape for Group<'a> {
+impl Shape for Group {
     fn shape_data(&self) -> &ShapeData {
         &self.data
     }
@@ -68,11 +70,19 @@ impl<'a> Shape for Group<'a> {
         if self.id() == id {
             return Some(self);
         }
+    
         for shape in &self.shapes {
+            // Many leaf shapes (e.g. `Sphere`) use the default `find_by_id` (returns None), so we must match by id directly here.
+            if shape.id() == id {
+                return Some(shape.as_ref());
+            }
+    
+            // If it's a nested Group, its overridden `find_by_id` can recurse.
             if let Some(found) = shape.find_by_id(id) {
                 return Some(found);
             }
         }
+    
         None
     }
 }
@@ -104,8 +114,9 @@ mod tests {
     fn adding_a_child_to_the_group() {
         let mut g = Group::new();
         let s = test_shape();
-        g.add_child(&s);
-        assert!(g.includes(&s))
+        let s_id = s.id();
+        g.add_child(Box::new(s));
+        assert!(g.includes(s_id));
     }
 
     #[test]
@@ -122,24 +133,26 @@ mod tests {
         use crate::transformation::translation;
     
         let s1 = Sphere::new();
+        let s1_id = s1.id();
         let mut s2 = Sphere::new();
         s2.set_transform(translation(0.0, 0.0, -3.0));
+        let s2_id = s2.id();
         let mut s3 = Sphere::new();
         s3.set_transform(translation(5.0, 0.0, 0.0));
     
         let mut g = Group::new();
-        g.add_child(&s1);
-        g.add_child(&s2);
-        g.add_child(&s3);
+        g.add_child(Box::new(s1));
+        g.add_child(Box::new(s2));
+        g.add_child(Box::new(s3));
     
         let r = Ray::new(Tuple::point(0.0, 0.0, -5.0), Tuple::vector(0.0, 0.0, 1.0));
         let xs = g.local_intersect(&r);
     
         assert_eq!(xs.count(), 4);
-        assert_eq!(xs.data[0].object.id(), s2.id());
-        assert_eq!(xs.data[1].object.id(), s2.id());
-        assert_eq!(xs.data[2].object.id(), s1.id());
-        assert_eq!(xs.data[3].object.id(), s1.id());
+        assert_eq!(xs.data[0].object.id(), s2_id);
+        assert_eq!(xs.data[1].object.id(), s2_id);
+        assert_eq!(xs.data[2].object.id(), s1_id);
+        assert_eq!(xs.data[3].object.id(), s1_id);
     }
 
     #[test]
@@ -153,7 +166,7 @@ mod tests {
         let mut s = Sphere::new();
         s.set_transform(translation(5.0, 0.0, 0.0));
     
-        g.add_child(&s);
+        g.add_child(Box::new(s));
     
         let r = Ray::new(Tuple::point(10.0, 0.0, -10.0), Tuple::vector(0.0, 0.0, 1.0));
         let xs = g.intersect(&r);
@@ -168,15 +181,16 @@ mod tests {
 
         let mut g = Group::new();
         g.set_transform(&rotation_y(0.35) * &translation(0.0, 0.0, 0.25));
-
-        let tri: &'static mut Triangle = Box::leak(Box::new(Triangle::new(
+        
+        let mut tri = Box::new(Triangle::new(
             Tuple::point(0.0, 1.0, 0.0),
             Tuple::point(-1.0, 0.0, 0.0),
             Tuple::point(1.0, 0.0, 0.0),
-        )));
+        ));
+        
         tri.shape_data_mut().parent = Some(g.id());
         g.add_child(tri);
-
+        
         let r = Ray::new(Tuple::point(0.0, 0.5, -4.0), Tuple::vector(0.0, 0.0, 1.0));
         let xs = g.intersect(&r);
         assert!(xs.count() >= 1, "expected at least one hit through group + triangle");

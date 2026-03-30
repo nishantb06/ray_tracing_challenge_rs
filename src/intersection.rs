@@ -507,32 +507,31 @@ mod tests {
         g2.set_transform(scaling(1.0, 2.0, 3.0));
 
         let mut s = Sphere::new();
+        let s_id = s.id();
         s.set_transform(translation(5.0, 0.0, 0.0));
 
         s.shape_data_mut().parent = Some(g2.id());
-        g2.add_child(&s);
+        g2.add_child(Box::new(s));
 
         g2.shape_data_mut().parent = Some(g1.id());
-        g1.add_child(&g2);
+        g1.add_child(Box::new(g2));
 
         let resolve = |id: u64| -> Option<&dyn Shape> {
-            if id == g1.id() {
-                Some(&g1 as &dyn Shape)
-            } else if id == g2.id() {
-                Some(&g2 as &dyn Shape)
-            } else if id == s.id() {
-                Some(&s as &dyn Shape)
-            } else {
-                None
-            }
+            g1.find_by_id(id)
         };
 
         let p = Tuple::point(1.7321, 1.1547, -5.5774);
         let r = Ray::new(p.clone(), Tuple::vector(0.0, 0.0, 1.0));
-        let i = Intersection::new(0.0, &s);
+        let s_ref = g1
+            .find_by_id(s_id)
+            .expect("sphere should be reachable via g1");
+        
+        let i = Intersection::new(0.0, s_ref);
         let xs = Intersections::new(vec![i.clone()]);
         let comps = prepare_computations(&i, &r, &xs, &resolve);
-        let expected = shape_normal_at(&s, &resolve, &p);
+        
+        // also replace expected similarly:
+        let expected = &shape_normal_at(s_ref, &resolve, &p);
 
         assert!(comps.normal_vector.is_equal(&expected));
         assert!(!comps.inside);
@@ -552,32 +551,31 @@ mod tests {
         g2.set_transform(scaling(1.0, 2.0, 3.0));
 
         let mut s = Sphere::new();
+        let s_id = s.id();
         s.set_transform(translation(5.0, 0.0, 0.0));
 
         s.shape_data_mut().parent = Some(g2.id());
-        g2.add_child(&s);
+        g2.add_child(Box::new(s));
 
         g2.shape_data_mut().parent = Some(g1.id());
-        g1.add_child(&g2);
+        g1.add_child(Box::new(g2));
 
         let resolve = |id: u64| -> Option<&dyn Shape> {
-            if id == g1.id() {
-                Some(&g1 as &dyn Shape)
-            } else if id == g2.id() {
-                Some(&g2 as &dyn Shape)
-            } else if id == s.id() {
-                Some(&s as &dyn Shape)
-            } else {
-                None
-            }
+            g1.find_by_id(id)
         };
 
         let p = Tuple::point(1.7321, 1.1547, -5.5774);
         let r = Ray::new(p.clone(), Tuple::vector(0.0, 0.0, -1.0));
-        let i = Intersection::new(0.0, &s);
+        let s_ref = g1
+            .find_by_id(s_id)
+            .expect("sphere should be reachable via g1");
+        
+        let i = Intersection::new(0.0, s_ref);
         let xs = Intersections::new(vec![i.clone()]);
         let comps = prepare_computations(&i, &r, &xs, &resolve);
-        let expected = -&shape_normal_at(&s, &resolve, &p);
+        
+        // also replace expected similarly:
+        let expected = -&shape_normal_at(s_ref, &resolve, &p);
 
         assert!(comps.normal_vector.is_equal(&expected));
         assert!(comps.inside);

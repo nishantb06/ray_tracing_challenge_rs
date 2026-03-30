@@ -62,8 +62,8 @@ fn bone_cylinder_with_base(
     radius: f64,
     length: f64,
     color: Color,
-) -> &'static mut Cylinder {
-    let c: &'static mut Cylinder = Box::leak(Box::new(Cylinder::new()));
+) -> Cylinder {
+    let mut c = Cylinder::new();
     c.minimum = 0.0;
     c.maximum = 1.0;
     c.closed = true;
@@ -75,20 +75,21 @@ fn bone_cylinder_with_base(
 
 /// Fingertip pad + nail plane; `tip_anchor` places the distal DIP joint (end of distal phalanx base).
 fn add_fingertip_nail(
-    finger_root: &mut Group<'static>,
+    finger_root: &mut Group,
     tip_anchor: Matrix,
     r: f64,
     skin: Color,
     with_nail: bool,
 ) {
-    let tip: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
-    tip.set_transform(&( &tip_anchor * &translation(0.0, 0.0, r * 0.14) ) * &scaling(r * 1.04, r * 1.04, r * 1.04));
+    let mut tip = Sphere::new();
+    tip.set_transform(
+        &( &tip_anchor * &translation(0.0, 0.0, r * 0.14) ) * &scaling(r * 1.04, r * 1.04, r * 1.04),
+    );
     apply_flesh_mat(tip.material_mut(), skin, 0.14);
-    tip.shape_data_mut().parent = Some(finger_root.id());
-    finger_root.add_child(tip);
+    finger_root.add_child(Box::new(tip));
 
     if with_nail {
-        let nail: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+        let mut nail = Sphere::new();
         nail.set_transform(
             &( &tip_anchor * &translation(0.0, 0.016, r * 0.62 + r * 0.15) )
                 * &scaling(r * 0.88, r * 0.20, r * 0.72),
@@ -98,29 +99,31 @@ fn add_fingertip_nail(
         nail.material_mut().diffuse = 0.75;
         nail.material_mut().specular = 0.42;
         nail.material_mut().shininess = 85.0;
-        nail.shape_data_mut().parent = Some(finger_root.id());
-        finger_root.add_child(nail);
+        finger_root.add_child(Box::new(nail));
     }
 }
 
 fn add_joint_pad(
-    finger_root: &mut Group<'static>,
+    finger_root: &mut Group,
     base: &Matrix,
     y_offset: f64,
     radius: f64,
     skin: Color,
 ) {
-    let pad: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut pad = Sphere::new();
     let t = &(base * &translation(0.0, y_offset, 0.0)) * &scaling(radius, radius * 0.65, radius);
     pad.set_transform(t);
-    apply_flesh_mat(pad.material_mut(), tint_skin(&skin, -0.04, -0.03, -0.02), 0.08);
-    pad.shape_data_mut().parent = Some(finger_root.id());
-    finger_root.add_child(pad);
+    apply_flesh_mat(
+        pad.material_mut(),
+        tint_skin(&skin, -0.04, -0.03, -0.02),
+        0.08,
+    );
+    finger_root.add_child(Box::new(pad));
 }
 
 /// Three phalanges with PIP / DIP flexion, knuckle pad, anatomical length ratios (prox > mid > dist).
 fn add_finger(
-    finger_root: &mut Group<'static>,
+    finger_root: &mut Group,
     length: f64,
     thick: f64,
     skin: Color,
@@ -134,14 +137,13 @@ fn add_finger(
     let d_len = length * 0.22;
 
     // MCP bulge — nudged into palm so the digit reads “rooted” not floating
-    let kn: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut kn = Sphere::new();
     kn.set_transform(
         &translation(0.0, -0.028 * (thick / 0.1).clamp(0.85, 1.15), -0.048)
             * &scaling(r * 0.58, r * 0.42, r * 0.58),
     );
     apply_flesh_mat(kn.material_mut(), tint_skin(&skin, -0.06, -0.05, -0.04), 0.08);
-    kn.shape_data_mut().parent = Some(finger_root.id());
-    finger_root.add_child(kn);
+    finger_root.add_child(Box::new(kn));
 
     let prox = bone_cylinder_with_base(
         translation(0.0, 0.0, 0.0),
@@ -149,13 +151,11 @@ fn add_finger(
         p_len,
         skin.clone(),
     );
-    prox.shape_data_mut().parent = Some(finger_root.id());
-    finger_root.add_child(prox);
+    finger_root.add_child(Box::new(prox));
 
     let b_mid = &translation(0.0, 0.0, p_len) * &rotation_x(-curl_pip);
     let mid = bone_cylinder_with_base(b_mid.clone(), r * 0.90, m_len, skin.clone());
-    mid.shape_data_mut().parent = Some(finger_root.id());
-    finger_root.add_child(mid);
+    finger_root.add_child(Box::new(mid));
     let b_pip = &translation(0.0, 0.0, p_len);
     add_joint_pad(finger_root, b_pip, -0.006, r * 0.42, skin.clone());
 
@@ -167,15 +167,14 @@ fn add_finger(
         d_len,
         tint_skin(&skin, -0.02, -0.02, -0.015),
     );
-    dist.shape_data_mut().parent = Some(finger_root.id());
-    finger_root.add_child(dist);
+    finger_root.add_child(Box::new(dist));
     add_joint_pad(finger_root, &b_mid_end, -0.004, r * 0.34, skin.clone());
 
     let tip_anchor = &b_dist * &translation(0.0, 0.0, d_len);
     add_fingertip_nail(finger_root, tip_anchor, r, skin, with_nail);
 }
 
-fn build_hand() -> Group<'static> {
+fn build_hand() -> Group {
     let mut hand = Group::new();
     // Palm-up presentation: slight world tilt
     hand.set_transform(
@@ -183,44 +182,39 @@ fn build_hand() -> Group<'static> {
     );
 
     // Palm: wider + flatter “metacarpal deck” (less ball, more paddle / trapezoid read)
-    let palm: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut palm = Sphere::new();
     palm.set_transform(&translation(0.0, 0.52, -0.02) * &scaling(0.46, 0.086, 0.36));
     apply_flesh_mat(palm.material_mut(), SKIN_BASE.clone(), 0.10);
-    palm.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(palm);
+    hand.add_child(Box::new(palm));
 
     // Thenar eminence — large mass from wrist to thumb CMC (fills radial gutter)
-    let thenar: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut thenar = Sphere::new();
     thenar.set_transform(&translation(-0.22, 0.478, -0.11) * &scaling(0.19, 0.10, 0.20));
     apply_flesh_mat(thenar.material_mut(), tint_skin(&SKIN_BASE, -0.05, -0.04, -0.03), 0.09);
-    thenar.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(thenar);
+    hand.add_child(Box::new(thenar));
 
-    let hypothenar: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut hypothenar = Sphere::new();
     hypothenar.set_transform(&translation(0.21, 0.498, -0.02) * &scaling(0.11, 0.055, 0.13));
     apply_flesh_mat(hypothenar.material_mut(), tint_skin(&SKIN_BASE, -0.05, -0.04, -0.03), 0.09);
-    hypothenar.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(hypothenar);
+    hand.add_child(Box::new(hypothenar));
 
     // Heel + carpal “bridge” softens palm–wrist junction (hides sharp cylinder cut)
-    let heel: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut heel = Sphere::new();
     heel.set_transform(&translation(0.0, 0.465, -0.20) * &scaling(0.20, 0.075, 0.18));
     apply_flesh_mat(heel.material_mut(), SKIN_SHADOW.clone(), 0.08);
-    heel.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(heel);
+    hand.add_child(Box::new(heel));
 
-    let carpal_blend: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut carpal_blend = Sphere::new();
     carpal_blend.set_transform(&translation(-0.06, 0.42, -0.33) * &scaling(0.24, 0.065, 0.16));
     apply_flesh_mat(
         carpal_blend.material_mut(),
         tint_skin(&SKIN_SHADOW, 0.04, 0.03, 0.03),
         0.07,
     );
-    carpal_blend.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(carpal_blend);
+    hand.add_child(Box::new(carpal_blend));
 
     // --- Wrist (tilted slightly to tuck under palm ellipsoid) ---
-    let wrist: &'static mut Cylinder = Box::leak(Box::new(Cylinder::new()));
+    let mut wrist = Cylinder::new();
     wrist.minimum = 0.0;
     wrist.maximum = 1.0;
     wrist.closed = true;
@@ -229,10 +223,9 @@ fn build_hand() -> Group<'static> {
             * &scaling(0.115, 0.30, 0.115),
     );
     apply_flesh_mat(wrist.material_mut(), SKIN_SHADOW.clone(), 0.09);
-    wrist.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(wrist);
+    hand.add_child(Box::new(wrist));
 
-    let forearm: &'static mut Cylinder = Box::leak(Box::new(Cylinder::new()));
+    let mut forearm = Cylinder::new();
     forearm.minimum = 0.0;
     forearm.maximum = 1.0;
     forearm.closed = true;
@@ -245,8 +238,7 @@ fn build_hand() -> Group<'static> {
         tint_skin(&SKIN_SHADOW, -0.01, -0.01, -0.01),
         0.08,
     );
-    forearm.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(forearm);
+    hand.add_child(Box::new(forearm));
 
     // Knuckle line: (x, z, len, thick, splay_z, converge_y, nail, PIP, DIP).
     // Fingers slightly converge toward middle finger and have a mild transverse arch in z.
@@ -258,21 +250,20 @@ fn build_hand() -> Group<'static> {
     ];
 
     for (fx, fz, flen, fthick, z_splay, y_conv, nail, curl_p, curl_d) in finger_specs {
-        let fg: &'static mut Group<'static> = Box::leak(Box::new(Group::new()));
+        let mut fg = Group::new();
         // MCPs slightly embedded in palm deck (lower Y, −Z) so cylinders aren’t “hovering”
         fg.set_transform(
             &( &( &translation(fx, 0.552, fz) * &rotation_y(y_conv) ) * &rotation_x(-0.14 - flen * 0.062) )
                 * &rotation_z(z_splay),
         );
-        fg.shape_data_mut().parent = Some(hand.id());
         let skin = tint_skin(
             &SKIN_BASE,
             fx * 0.035,
             -(fx.abs() * 0.025),
             -fx.abs() * 0.012,
         );
-        add_finger(fg, flen, fthick, skin, nail, curl_p, curl_d);
-        hand.add_child(fg);
+        add_finger(&mut fg, flen, fthick, skin, nail, curl_p, curl_d);
+        hand.add_child(Box::new(fg));
     }
 
     // Webbing between fingers to soften hard cylinder starts.
@@ -282,21 +273,20 @@ fn build_hand() -> Group<'static> {
         (0.170, 0.548, 0.190, 0.065, 0.020, 0.055),
     ];
     for (wx, wy, wz, sx, sy, sz) in webs {
-        let w: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+        let mut w = Sphere::new();
         w.set_transform(&translation(wx, wy, wz) * &scaling(sx, sy, sz));
         apply_flesh_mat(
             w.material_mut(),
             tint_skin(&SKIN_BASE, -0.03, -0.02, -0.015),
             0.08,
         );
-        w.shape_data_mut().parent = Some(hand.id());
-        hand.add_child(w);
+        hand.add_child(Box::new(w));
     }
 
     // Subtle dorsal tendons.
     let tendon_specs = [(-0.10, 0.525, -0.005), (0.08, 0.528, -0.010)];
     for (tx, ty, rz) in tendon_specs {
-        let t: &'static mut Cylinder = Box::leak(Box::new(Cylinder::new()));
+        let mut t = Cylinder::new();
         t.minimum = 0.0;
         t.maximum = 1.0;
         t.closed = true;
@@ -309,14 +299,13 @@ fn build_hand() -> Group<'static> {
             tint_skin(&SKIN_BASE, -0.08, -0.07, -0.06),
             0.06,
         );
-        t.shape_data_mut().parent = Some(hand.id());
-        hand.add_child(t);
+        hand.add_child(Box::new(t));
     }
 
     // Gold band on ring finger (follows MCP frame + proximal shaft)
     let ring_base = &( &( &translation(0.09, 0.552, 0.222) * &rotation_y(-0.02) ) * &rotation_x(-0.14 - 0.56 * 0.062) )
         * &rotation_z(-0.07);
-    let ring: &'static mut Cylinder = Box::leak(Box::new(Cylinder::new()));
+    let mut ring = Cylinder::new();
     ring.minimum = 0.0;
     ring.maximum = 1.0;
     ring.closed = true;
@@ -327,28 +316,25 @@ fn build_hand() -> Group<'static> {
     ring.material_mut().color = RING_METAL;
     ring.material_mut().specular = 0.9;
     ring.material_mut().shininess = 220.0;
-    ring.shape_data_mut().parent = Some(hand.id());
-    hand.add_child(ring);
+    hand.add_child(Box::new(ring));
 
     // --- Thumb: two-part hierarchy fixes orientation ---
     // `thumb_shell` = CMC on radial rim only (translation). `thumb_orient` = rotation only so local +Z
     // runs from radial border toward the index/MCP line (opposition), same convention as fingers.
     // Bones stay in `thumb_orient` space — no mixed Ry·Rz·Rx on one matrix splintering segments.
-    let thumb_shell: &'static mut Group<'static> = Box::leak(Box::new(Group::new()));
+    let mut thumb_shell = Group::new();
     // Radial edge (-X), on palm deck, slightly toward fingertips (+Z) — not on palm “screen” plane
     thumb_shell.set_transform(translation(-0.305, 0.515, 0.022));
-    thumb_shell.shape_data_mut().parent = Some(hand.id());
 
-    let thumb_orient: &'static mut Group<'static> = Box::leak(Box::new(Group::new()));
+    let mut thumb_orient = Group::new();
     // R_x * R_y: first R_y swings default +Z toward +X (into palm); R_x lifts toward +Y (out of palm).
     // Tuned so one continuous chain reads as one thumb, not scattered cylinders.
     thumb_orient.set_transform(
         &( &rotation_x(-0.18) * &rotation_y(0.62) ) * &rotation_z(0.10),
     );
-    thumb_orient.shape_data_mut().parent = Some(thumb_shell.id());
 
     // CMC pad — sits at origin of oriented chain (thenar side)
-    let t_kn: &'static mut Sphere = Box::leak(Box::new(Sphere::new()));
+    let mut t_kn = Sphere::new();
     t_kn.set_transform(
         &translation(0.0, -0.022, -0.028) * &scaling(0.095, 0.062, 0.095),
     );
@@ -357,8 +343,7 @@ fn build_hand() -> Group<'static> {
         tint_skin(&SKIN_BASE, -0.05, -0.04, -0.035),
         0.08,
     );
-    t_kn.shape_data_mut().parent = Some(thumb_orient.id());
-    thumb_orient.add_child(t_kn);
+    thumb_orient.add_child(Box::new(t_kn));
 
     let tm1 = 0.116;
     let tm2 = 0.122;
@@ -373,8 +358,7 @@ fn build_hand() -> Group<'static> {
         tm1,
         tint_skin(&SKIN_BASE, -0.03, -0.02, -0.02),
     );
-    t_meta.shape_data_mut().parent = Some(thumb_orient.id());
-    thumb_orient.add_child(t_meta);
+    thumb_orient.add_child(Box::new(t_meta));
 
     let t_b2 = &translation(0.0, 0.0, tm1) * &rotation_x(-tc1);
     let t_prox = bone_cylinder_with_base(
@@ -383,8 +367,7 @@ fn build_hand() -> Group<'static> {
         tm2,
         SKIN_BASE.clone(),
     );
-    t_prox.shape_data_mut().parent = Some(thumb_orient.id());
-    thumb_orient.add_child(t_prox);
+    thumb_orient.add_child(Box::new(t_prox));
 
     let t_b2e = &t_b2 * &translation(0.0, 0.0, tm2);
     let t_b3 = &t_b2e * &rotation_x(-tc2);
@@ -394,14 +377,13 @@ fn build_hand() -> Group<'static> {
         tm3,
         tint_skin(&SKIN_BASE, -0.02, -0.02, -0.015),
     );
-    t_dist.shape_data_mut().parent = Some(thumb_orient.id());
-    thumb_orient.add_child(t_dist);
+    thumb_orient.add_child(Box::new(t_dist));
 
     let t_tip_anchor = &t_b3 * &translation(0.0, 0.0, tm3);
-    add_fingertip_nail(thumb_orient, t_tip_anchor, t_r, SKIN_BASE.clone(), true);
+    add_fingertip_nail(&mut thumb_orient, t_tip_anchor, t_r, SKIN_BASE.clone(), true);
 
-    thumb_shell.add_child(thumb_orient);
-    hand.add_child(thumb_shell);
+    thumb_shell.add_child(Box::new(thumb_orient));
+    hand.add_child(Box::new(thumb_shell));
 
     hand
 }

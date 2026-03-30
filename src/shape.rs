@@ -121,6 +121,7 @@ pub fn shape_normal_at<'a>(
 pub mod test_support {
     use super::*;
     use std::cell::RefCell;
+    
 
     #[derive(Debug)]
     pub struct TestShape {
@@ -256,30 +257,28 @@ mod tests {
         g1.set_transform(rotation_y(std::f64::consts::FRAC_PI_2));
     
         let mut g2 = Group::new();
+        
         g2.set_transform(scaling(2.0, 2.0, 2.0));
     
         let mut s = Sphere::new();
+        let s_id = s.id();
         s.set_transform(translation(5.0, 0.0, 0.0));
     
         s.shape_data_mut().parent = Some(g2.id());
-        g2.add_child(&s);
+        g2.add_child(Box::new(s));
     
         g2.shape_data_mut().parent = Some(g1.id());
-        g1.add_child(&g2);
+        g1.add_child(Box::new(g2));
     
+        let s_ref = g1
+            .find_by_id(s_id)
+            .expect("sphere should be reachable via g1");
+
         let resolve = |id: u64| -> Option<&dyn Shape> {
-            if id == g1.id() {
-                Some(&g1 as &dyn Shape)
-            } else if id == g2.id() {
-                Some(&g2 as &dyn Shape)
-            } else if id == s.id() {
-                Some(&s as &dyn Shape)
-            } else {
-                None
-            }
+            g1.find_by_id(id)
         };
-    
-        let p = world_to_object(&s, &resolve, &Tuple::point(-2.0, 0.0, -10.0));
+
+        let p = world_to_object(&*s_ref, &resolve, &Tuple::point(-2.0, 0.0, -10.0));
     
         assert!(p.is_equal(&Tuple::point(0.0, 0.0, -1.0)));
     }
@@ -290,6 +289,7 @@ mod tests {
         use crate::sphere::Sphere;
         use crate::transformation::{rotation_y, scaling, translation};
         use crate::group::Group;
+        use crate::shape::Shape;
         use std::f64::consts::FRAC_PI_2;
     
         let mut g1 = Group::new();
@@ -299,24 +299,21 @@ mod tests {
         g2.set_transform(scaling(1.0, 2.0, 3.0));
     
         let mut s = Sphere::new();
+        let s_id = s.id();
         s.set_transform(translation(5.0, 0.0, 0.0));
     
         s.shape_data_mut().parent = Some(g2.id());
-        g2.add_child(&s);
+        g2.add_child(Box::new(s));
     
         g2.shape_data_mut().parent = Some(g1.id());
-        g1.add_child(&g2);
+        g1.add_child(Box::new(g2));
+    
+        let s_ref = g1
+            .find_by_id(s_id)
+            .expect("sphere should be reachable via g1");
     
         let resolve = |id: u64| -> Option<&dyn Shape> {
-            if id == g1.id() {
-                Some(&g1 as &dyn Shape)
-            } else if id == g2.id() {
-                Some(&g2 as &dyn Shape)
-            } else if id == s.id() {
-                Some(&s as &dyn Shape)
-            } else {
-                None
-            }
+            g1.find_by_id(id)
         };
     
         let n_obj = Tuple::vector(
@@ -324,7 +321,8 @@ mod tests {
             3.0f64.sqrt() / 3.0,
             3.0f64.sqrt() / 3.0,
         );
-        let n = normal_to_world(&s, &resolve, &n_obj);
+    
+        let n = normal_to_world(s_ref, &resolve, &n_obj);
         assert!(n.is_equal(&Tuple::vector(0.28571, 0.42857, -0.85714)));
     }
 
@@ -343,29 +341,26 @@ mod tests {
         g2.set_transform(scaling(1.0, 2.0, 3.0));
     
         let mut s = Sphere::new();
+        let s_id = s.id();
         s.set_transform(translation(5.0, 0.0, 0.0));
     
         s.shape_data_mut().parent = Some(g2.id());
-        g2.add_child(&s);
+        g2.add_child(Box::new(s));
     
         g2.shape_data_mut().parent = Some(g1.id());
-        g1.add_child(&g2);
+        g1.add_child(Box::new(g2));
+    
+        let s_ref = g1
+            .find_by_id(s_id)
+            .expect("sphere should be reachable via g1");
     
         let resolve = |id: u64| -> Option<&dyn Shape> {
-            if id == g1.id() {
-                Some(&g1 as &dyn Shape)
-            } else if id == g2.id() {
-                Some(&g2 as &dyn Shape)
-            } else if id == s.id() {
-                Some(&s as &dyn Shape)
-            } else {
-                None
-            }
+            g1.find_by_id(id)
         };
     
         let p = Tuple::point(1.7321, 1.1547, -5.5774);
-        let n = shape_normal_at(&s, &resolve, &p);
-        
+        let n = shape_normal_at(s_ref, &resolve, &p);
+    
         assert!(n.is_equal(&Tuple::vector(0.285703, 0.4285431, -0.857160)));
     }
 }

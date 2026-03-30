@@ -77,7 +77,7 @@ fn main() {
     let gold_dark = Color::new(0.58, 0.44, 0.22);
 
     // All mesh triangles live under one group so we can transform the whole solid.
-    let mut dodeca: Group<'static> = Group::new();
+    let mut dodeca: Group = Group::new();
     dodeca.set_transform(
         &( &rotation_y(0.55) * &translation(0.0, -0.12, 0.0) ) * &scaling(1.05, 1.05, 1.05),
     );
@@ -89,11 +89,11 @@ fn main() {
             gold_dark.clone()
         };
 
-        let t: &'static mut Triangle = Box::leak(Box::new(Triangle::new(
+        let mut t:Triangle = Triangle::new(
             verts[tri_idx[0]].clone(),
             verts[tri_idx[1]].clone(),
             verts[tri_idx[2]].clone(),
-        )));
+        );
         {
             let m = t.material_mut();
             *m = Material::new();
@@ -104,7 +104,7 @@ fn main() {
             m.shininess = 80.0;
         }
         t.shape_data_mut().parent = Some(dodeca.id());
-        dodeca.add_child(t);
+        dodeca.add_child(Box::new(t));
     }
 
     world.add_shape(dodeca);

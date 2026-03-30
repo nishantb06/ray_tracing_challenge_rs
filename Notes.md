@@ -2030,12 +2030,278 @@ If you want, next I can do a quick commit with a clean message focused on “fix
 
 ---------------------
 ---------------------
+In `World::add_shape`, the `+'static` means **the concrete shape type you pass in must be valid for the `'static` lifetime**:
 
----------------------
----------------------
----------------------
----------------------
+```rust
+pub fn add_shape(&mut self, shape: impl Shape + 'static) {
+    self.objects.push(Box::new(shape));
+}
+```
 
+### Why it’s needed here
+Your `World` stores shapes as:
+
+```rust
+pub objects: Vec<Box<dyn Shape>>,
+```
+
+A `Box<dyn Shape>` defaults to `Box<dyn Shape + 'static>`, meaning the trait object stored inside the `Box` must not contain any non-`'static` references (otherwise it could dangle once the original variables go out of scope).
+
+So `impl Shape + 'static` is a compile-time guarantee that your shape **doesn’t borrow any local data**.
+
+### “`'static`” doesn’t mean “lives forever”
+It means: **the type contains no non-`'static` references** (i.e., it’s safe for the whole program lifetime). Since `add_shape` takes `shape` by value and then moves it into `Box::new(shape)`, the shape will live as long as `world.objects` does.
+
+### Contrast with your `Group<'a>`
+Your `Group<'a>` stores borrowed children (`Vec<Box<&'a dyn Shape>>`). Such a `Group<'a>` is only `'static` if `'a` itself is `'static` (e.g., your tests leak triangles to get `&'static` references). Otherwise it can’t be added to `World` with this signature.
+
+If you want, tell me one of the shape types you’re adding with `add_shape` (e.g. `Sphere`, `Triangle`, `Group`), and I can explain how it satisfies (or fails) the `'static` bound in that specific case.
+---------------------
+By “leaks triangles” I meant this pattern in your `Group` tests:
+
+```rust
+let tri: &'static mut Triangle = Box::leak(Box::new(Triangle::new(...)));
+```
+
+### What `Box::leak(...)` does
+- `Box::new(Triangle::new(...))` allocates a `Triangle` on the heap.
+- `Box::leak(boxed)` converts `Box<T>` into a reference with lifetime `&'static mut T` by **intentionally never freeing** that allocation.
+- “Leaking” = the memory remains allocated until the program exits.
+
+### Why you need it in this code
+Your `Group<'a>` stores children as borrowed trait-object references:
+
+- `shapes: Vec<Box<&'a dyn Shape>>`
+- `add_child(&mut self, shape: &'a dyn Shape)`
+
+So to add a child and have it last long enough (for type-checking), the test uses `&'static`—and the easiest way in a test is `Box::leak`, since it manufactures an `&'static` reference.
+
+### Where it’s happening
+It’s in `src/group.rs` inside the test `transformed_group_intersects_leaked_triangle_children`, around the `Box::leak` call.
+
+If you want to avoid leaking in real code (not just tests), we’d need a different ownership model for groups/triangles (e.g., store owned shapes, use `Rc/Arc`, or store indices/IDs into an arena).
+---------------------
+## 1. Current high-level ownership model (what owns what)
+
+### `World` owns the top-level scene objects
+`World` stores `objects: Vec<Box<dyn Shape>>`, so when you call `world.add_shape(...)`, the `Box` inside `world.objects` owns the object and will drop it when `world` drops.
+
+```startLine:11:endLine:68:src/world.rs
+pub struct World {
+    pub objects: Vec<Box<dyn Shape>>,
+    pub lights: Vec<PointLight>,
+}
+
+impl World {
+    pub fn new() -> Self {
+        World {
+            objects: Vec::new(),
+            lights: Vec::new(),
+        }
+    }
+
+    pub fn add_shape(&mut self, shape: impl Shape + 'static) {
+        self.objects.push(Box::new(shape));
+    }
+}
+```
+
+### `Intersection` / `Intersections` do NOT own shapes; they borrow them
+`Intersection<'a>` stores `object: &'a dyn Shape`. So intersections allocate only the `Vec` of intersection records; the referenced shapes are borrowed from wherever they live (usually `World`).
+
+```startLine:8:endLine:28:src/intersection.rs
+pub struct Intersection<'a> {
+    pub t: f64,
+    pub object: &'a dyn Shape,
+}
+
+pub struct Intersections<'a> {
+    pub data: Vec<Intersection<'a>>,
+}
+```
+
+`prepare_computations` copies geometric values (points/normals/etc) into its own struct, but it keeps borrowing the `object` shape reference.
+
+### `Material` owns `Pattern` (no lifetime gymnastics here)
+`Material` has `pattern: Option<Box<dyn Pattern>>`, so pattern lifetimes are owned by the material inside each shape’s `ShapeData`.
+
+```startLine:7:endLine:19:src/material.rs
+pub struct Material {
+    pub color: Color,
+    pub ambient: f64,
+    pub diffuse: f64,
+    pub specular: f64,
+    pub shininess: f64,
+    pub pattern: Option<Box<dyn Pattern>>,
+    pub reflective: f64,
+    pub transparency: f64,
+    pub refractive_index: f64,
+}
+```
+
+### `Group` currently does *not* own its children (this is the main complication)
+`Group<'a>` stores borrowed children: `Vec<Box<&'a dyn Shape>>`. That means the `Group` does not drop child shapes; it only holds references to them.
+
+```startLine:8:endLine:42:src/group.rs
+pub struct Group<'a> {
+    pub data: ShapeData,
+    pub shapes: Vec<Box<&'a dyn Shape>>,
+    pub ids: HashSet<u64>,
+}
+
+impl<'a> Group<'a> {
+    pub fn add_child(&mut self, shape: &'a dyn Shape) {
+        self.ids.insert(shape.id());
+        self.shapes.push(Box::new(shape));
+    }
+}
+```
+
+So in your current design:
+- `Group` takes ownership of **nothing** about its children (it just borrows them).
+- Therefore those children must outlive the `Group`.
+
+## 2. Direct answers to the ownership questions you asked
+
+### “I declare a shape, then add it to a group — does the group take ownership of the shape variable?”
+No.
+
+`Group::add_child(&mut self, shape: &'a dyn Shape)` takes a reference. So if you do:
+
+- `let mut s = Sphere::new();`
+- `group.add_child(&s);`
+
+then `group` does **not** own `s`. `s` must outlive `group`.
+
+In your examples/tests you “fix” this by leaking the shape to get an `&'static mut ...`, then passing that reference into `add_child`.
+
+### “When I add that group to a world, does the world take ownership of the group and all shapes in it?”
+The world owns the **group object** (because `world.objects` stores `Box<dyn Shape>`), but the world does **not** own the group’s children.
+
+So:
+- World owns: the boxed root `Group` value.
+- World does *not* own: the child shapes referenced by `Group.shapes`.
+- Those child shapes must live long enough (currently you guarantee that with `Box::leak`).
+
+### “Where do Box::leak / `'static` come from?”
+They’re a consequence of mixing:
+- `World` requires `Shape + 'static` to be stored as `Box<dyn Shape>`
+- `Group<'a>` can only be a `'static` root if its borrowed children are also `'static`
+- your OBJ parser constructs `Group<'static>` and triangle references by leaking triangles, e.g. `let tri = Box::leak(...)`.
+
+You can see the OBJ parser leaking triangles here:
+
+```startLine:17:endLine:25:src/obj_file.rs
+pub struct ObjParser {
+    pub default_group: Group<'static>,
+    named_groups: HashMap<String, Group<'static>>,
+}
+```
+
+```startLine:105:endLine:125:src/obj_file.rs
+let tri = Box::leak(Box::new(Triangle::new(p1, p2, p3)));
+if let Some(m) = material {
+    assign_material(tri.material_mut(), m);
+}
+match &active {
+    ActiveGroup::Default => {
+        tri.shape_data_mut().parent = Some(default_group.id());
+        default_group.add_child(&*tri);
+    }
+    ActiveGroup::Named(name) => {
+        let g = named_groups.get_mut(name).expect(...);
+        tri.shape_data_mut().parent = Some(g.id());
+        g.add_child(&*tri);
+    }
+}
+triangle_refs.push(&*tri);
+```
+
+And the `teapot` binary leaks the parser similarly:
+
+```startLine:19:endLine:32:src/bin/teapot.rs
+let mut porcelain = Material::new();
+...
+let parser: &'static _ = Box::leak(Box::new(parse_obj_file_with_material(&src, &porcelain)));
+
+let mut teapot = obj_to_group(parser);
+...
+world.add_shape(teapot);
+```
+
+## 3. Variable flow + what gets cleaned up vs persists
+
+### Stack vs heap vs “persists”
+Rust drop rules mean:
+
+- Normal temporaries (like `Tuple`, `Color`, `Ray`, `f64`s) are plain values. They live on the stack for the duration of the scope and are dropped automatically when the scope ends.
+- `Vec<T>` is heap-backed. The allocation is freed when the owning `Vec` is dropped.
+- If you leak with `Box::leak`, that allocation is *never freed* (it persists for the program lifetime).
+
+### Intermediates in your ray pipeline
+Typical flow in your code:
+- `world.intersect_world(ray)` builds an `Intersections` with a `Vec<Intersection<'a>>`.
+- Each `Intersection` is just `{ t, object: &dyn Shape }` so it stores references, not owning allocations of shapes.
+- `Intersections` frees its internal `Vec` when it goes out of scope.
+- `prepare_computations` returns `Computations` which stores geometry values by value (`point`, `normal_vector`, etc) and drops them when `shade_hit` finishes.
+
+So yes: points/normals/intersections/computations are cleaned up normally **unless** you created them by leaking (your leaked case is about triangles/groups/parser, not about these per-ray temporaries).
+
+### Heap allocations that happen repeatedly (not leaks, but churn)
+Even without leaks, you currently allocate:
+- a new `Vec` inside each `local_intersect` (most shapes do `Intersections::new(vec![...])`)
+- a new `Vec` per `Group::local_intersect` (`all_intersections = Vec::new()`)
+
+This is “freed each call”, but it’s still allocation overhead.
+
+## 4. What makes your API complicated (the concrete “mistakes”)
+
+1. `Group` chooses a borrowed-child representation (`Group<'a>` with `Vec<Box<&'a dyn Shape>>`).
+2. `World` chooses an owned-trait-object representation (`World` owns `Box<dyn Shape>` and forces `'static`).
+3. Those two models don’t compose without requiring borrowed data to be `'static`.
+4. You then “paper over it” by using `Box::leak` to manufacture `'static` lifetimes.
+
+Net effect: you can’t build scenes naturally with normal local variables; you’re forced into a “leak everything or it won’t typecheck” workflow.
+
+## 5. How to avoid `Box::leak` / `'static` and simplify the API (design direction)
+
+You want one consistent ownership model.
+
+The simplest direction consistent with your current rest-of-engine design (borrowed intersections) is:
+
+- Make `Group` **own** its children:
+  - `Group` should store `Vec<Box<dyn Shape>>` (owned), not `Vec<Box<&dyn Shape>>` (borrowed).
+  - `Group::add_child` should accept an owned shape (move it in), not `&dyn Shape`.
+
+Then:
+- `Group` becomes a normal owned `Shape` that can be stored inside `World` without requiring leaked children.
+- Intersections can still borrow `&dyn Shape` from the owned shapes inside `World`.
+- Your OBJ parser can construct triangles normally into owned storage (no `Box::leak`), and `obj_to_group` can return an owned `Group`.
+
+A second simplification lever (optional after ownership is fixed):
+- Remove the need for leaking the entire parser in `teapot.rs` by making `obj_to_group` return an owned `Group` that doesn’t borrow from `ObjParser`.
+
+## 6. Drop-in documentation you can add (high-level)
+
+If you want a clean “ownership contract” to paste into `Notes.md`, here’s a draft you can adapt:
+
+- `World` owns scene geometry via `objects: Vec<Box<dyn Shape>>`. Dropping `World` drops all root shapes.
+- `Intersection` borrows the hit shape via `object: &'a dyn Shape`; it does not own geometry.
+- `Intersections` owns only the `Vec` of intersection records; it is freed when the `Intersections` value drops.
+- `Computations` owns geometric values (`point`, `normal_vector`, etc) by value; it borrows `object` for material lookup.
+- `Material` owns `Pattern` (`Option<Box<dyn Pattern>>`), so patterns live as long as their shape’s material lives.
+- `Group` is a scene-graph node. In the current code it borrows children, so borrowed children must outlive the `Group` (leading to `Box::leak`). A cleaner design is to make `Group` own its children.
+
+If you want, I can also outline what the revised `Group` / `obj_file` API signatures would look like in your codebase (still without editing), so you can see how many call sites you’d need to update.
+---------------------
+---------------------
+// The generic lifetime param means that the an instance of the group cant outlive, any of the shapes that are pushed into the shapes array.
+// The `'a` lifetime ties `Group<'a>` to the borrowed child shapes stored in `shapes`.
+// `Group<'a>` can’t outlive those references (it doesn’t own the shapes).
+
+/// Hierarchical shape: transforms apply to all children. Children are stored as `&'static` trait
+/// object references (typically `Box::leak`’d primitives or nested groups). Triangles, spheres,
+/// cylinders, etc. all work as children as long as `parent` is set for parent-aware normals.
 ---------------------
 ---------------------
 
