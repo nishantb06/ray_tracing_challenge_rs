@@ -132,11 +132,27 @@ impl ObjParser {
             self.ignored_lines += 1;
         }
     }
+
+
+    pub fn obj_to_group(self) -> Group {
+        let mut root = Group::new();
+
+        // include default group (even if empty)
+        root.add_child(Box::new(self.default_group));
+
+        // include all named groups
+        for (_name, group) in self.named_groups {
+            root.add_child(Box::new(group));
+        }
+
+        root
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shape::Shape;
 
     #[test]
     fn ignoring_unrecognized_lines() {
@@ -237,14 +253,14 @@ mod tests {
     #[test]
     fn triangles_in_groups() {
         let file = r#"v -1 1 0
-    v -1 0 0
-    v 1 0 0
-    v 1 1 0
-    g FirstGroup
-    f 1 2 3
-    g SecondGroup
-    f 1 3 4
-    "#;
+        v -1 0 0
+        v 1 0 0
+        v 1 1 0
+        g FirstGroup
+        f 1 2 3
+        g SecondGroup
+        f 1 3 4
+        "#;
     
         let mut parser = ObjParser::new();
         parser.parse(file);
@@ -262,5 +278,37 @@ mod tests {
         assert_eq!(t2.p1, parser.vertices[1]);
         assert_eq!(t2.p2, parser.vertices[3]);
         assert_eq!(t2.p3, parser.vertices[4]);
+    }
+
+    #[test]
+    fn converting_an_obj_file_to_a_group() {
+        let file = r#"v -1 1 0
+        v -1 0 0
+        v 1 0 0
+        v 1 1 0
+        g FirstGroup
+        f 1 2 3
+        g SecondGroup
+        f 1 3 4
+        "#;
+    
+        let mut parser = ObjParser::new();
+        parser.parse(file);
+    
+        let g1_id = parser
+            .named_groups
+            .get("FirstGroup")
+            .expect("missing FirstGroup")
+            .id();
+        let g2_id = parser
+            .named_groups
+            .get("SecondGroup")
+            .expect("missing SecondGroup")
+            .id();
+    
+        let g = parser.obj_to_group();
+    
+        assert!(g.includes(g1_id));
+        assert!(g.includes(g2_id));
     }
 }
