@@ -53,30 +53,50 @@ impl ObjParser {
             if let Some(rest) = line.strip_prefix("f ") {
                 let parts: Vec<&str> = rest.split_whitespace().collect();
                 if parts.len() < 3 {
-                    // Option A (strict): count malformed vertex lines as ignored
+                    // Need at least 3 indices to make a triangle
                     self.ignored_lines += 1;
                     continue;
                 }
-                let i = parts[0].parse::<usize>();
-                let j = parts[1].parse::<usize>();
-                let k = parts[2].parse::<usize>();
-
-                match (i,j,k) {
-                    (Ok(i),Ok(j),Ok(k)) => {
-                        // create a triangle with vertices i,j,k and add it to group
-                        let p1 = self.vertices[i].clone();
-                        let p2 = self.vertices[j].clone();
-                        let p3 = self.vertices[k].clone();
-                        let t = Triangle::new(p1.clone(), p2.clone(), p3.clone());
-                        let t_copy = Triangle::new(p1.clone(), p2.clone(), p3.clone());
-
-                        self.triangles.push(t_copy);
-                        // add to the default group
-                        self.default_group.add_child(Box::new(t));
-                    },
-                    _ => {self.ignored_lines += 1;}
+                // Try to parse all indices for this face.
+                let mut indices = Vec::new();
+                let mut parse_failed = false;
+                for part in parts.iter() {
+                    // .obj faces may have slashes: "1/2/3", "1//3" etc, so take only the first part before '/'
+                    let vertex_idx_str = part.split('/').next().unwrap();
+                    match vertex_idx_str.parse::<usize>() {
+                        Ok(idx) => indices.push(idx),
+                        Err(_) => {
+                            parse_failed = true;
+                            break;
+                        }
+                    }
                 }
-
+                if parse_failed {
+                    self.ignored_lines += 1;
+                    continue;
+                }
+                // Fan triangulation: for n vertices, create triangles (v1,v2,v3), (v1,v3,v4), ... (v1,v_{n-1},v_n)
+                for i in 1..(indices.len() - 1) {
+                    let idx1 = indices[0];
+                    let idx2 = indices[i];
+                    let idx3 = indices[i + 1];
+                    
+                    // Defensive: check validity of indices
+                    if idx1 >= self.vertices.len() || idx2 >= self.vertices.len() || idx3 >= self.vertices.len() {
+                        self.ignored_lines += 1;
+                        continue;
+                    }
+                    
+                    let p1 = self.vertices[idx1].clone();
+                    let p2 = self.vertices[idx2].clone();
+                    let p3 = self.vertices[idx3].clone();
+                    
+                    let t = Triangle::new(p1.clone(), p2.clone(), p3.clone());
+                    let t_copy = Triangle::new(p1.clone(), p2.clone(), p3.clone());
+                    
+                    self.triangles.push(t_copy);
+                    self.default_group.add_child(Box::new(t));
+                }
                 continue;
             }
             self.ignored_lines += 1;
@@ -142,5 +162,44 @@ mod tests {
         assert_eq!(t2.p3, parser.vertices[4]);
 
         assert_eq!(parser.default_group.shapes.len(),2);
+    }
+
+    #[test]
+    fn parsing_polygon_faces_gets_triangulated() {
+        let file = r#"
+        v -1 1 0
+        v -1 0 0
+        v 1 0 0
+        v 1 1 0
+        v 0 2 0
+        f 1 2 3 4 5
+        "#;
+
+        let mut parser = ObjParser::new();
+        parser.parse(file);
+
+        // The polygon should be triangulated into three triangles:
+        //  f 1 2 3 4 5
+        //    --> 1 2 3, 1 3 4, 1 4 5
+
+        assert_eq!(parser.default_group.shapes.len(), 3);
+        assert_eq!(parser.triangles.len(), 3);
+
+        let t1 = &parser.triangles[0];
+        let t2 = &parser.triangles[1];
+        let t3 = &parser.triangles[2];
+
+        // Each triangle's points should be the correct vertices
+        assert_eq!(t1.p1, parser.vertices[1]);
+        assert_eq!(t1.p2, parser.vertices[2]);
+        assert_eq!(t1.p3, parser.vertices[3]);
+
+        assert_eq!(t2.p1, parser.vertices[1]);
+        assert_eq!(t2.p2, parser.vertices[3]);
+        assert_eq!(t2.p3, parser.vertices[4]);
+
+        assert_eq!(t3.p1, parser.vertices[1]);
+        assert_eq!(t3.p2, parser.vertices[4]);
+        assert_eq!(t3.p3, parser.vertices[5]);
     }
 }
