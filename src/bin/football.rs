@@ -6,7 +6,7 @@ use ray_tracing_challenge_rs::material::Material;
 use ray_tracing_challenge_rs::shape::Shape;
 use ray_tracing_challenge_rs::sphere::Sphere;
 use ray_tracing_challenge_rs::transformation::{rotation_y, scaling, translation, view_transform};
-use ray_tracing_challenge_rs::triangle::Triangle;
+use ray_tracing_challenge_rs::smooth_triangle::SmoothTriangle;
 use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
 use std::f64::consts::FRAC_PI_3;
@@ -141,9 +141,35 @@ const HEXAGONS: &[[usize; 6]] = &[
     [18, 42, 33, 57, 24, 48],
     [19, 51, 27, 59, 35, 43],
 ];
+#[derive(Clone)]
+struct Tri {
+    p1: Tuple,
+    p2: Tuple,
+    p3: Tuple,
+}
 
-fn add_triangle(group: &mut Group, verts: &[Tuple], i0: usize, i1: usize, i2: usize, material: &Material) {
-    let mut t = Triangle::new(verts[i0].clone(), verts[i1].clone(), verts[i2].clone());
+fn radial_normal(p: &Tuple) -> Tuple {
+    Tuple::vector(p.x, p.y, p.z).normalize()
+}
+
+fn add_smooth_triangle(
+    group: &mut Group,
+    tri: &Tri,
+    material: &Material,
+) {
+    let n1 = radial_normal(&tri.p1);
+    let n2 = radial_normal(&tri.p2);
+    let n3 = radial_normal(&tri.p3);
+
+    let mut t = SmoothTriangle::new(
+        tri.p1.clone(),
+        tri.p2.clone(),
+        tri.p3.clone(),
+        n1,
+        n2,
+        n3,
+    );
+
     *t.material_mut() = Material {
         color: material.color.clone(),
         ambient: material.ambient,
@@ -155,7 +181,35 @@ fn add_triangle(group: &mut Group, verts: &[Tuple], i0: usize, i1: usize, i2: us
         transparency: material.transparency,
         refractive_index: material.refractive_index,
     };
+
     group.add_child(Box::new(t));
+}
+
+fn subdivide_tri(tri: &Tri, levels: usize, radius: f64) -> Vec<Tri> {
+    if levels == 0 {
+        return vec![tri.clone()];
+    }
+
+    let mid = |a: &Tuple, b: &Tuple| -> Tuple {
+        // midpoint of two points on the sphere, treated as vectors from origin
+        let v = Tuple::vector(a.x + b.x, a.y + b.y, a.z + b.z).normalize();
+        Tuple::point(v.x * radius, v.y * radius, v.z * radius)
+    };
+
+    let m12 = mid(&tri.p1, &tri.p2);
+    let m23 = mid(&tri.p2, &tri.p3);
+    let m31 = mid(&tri.p3, &tri.p1);
+
+    let t1 = Tri { p1: tri.p1.clone(), p2: m12.clone(), p3: m31.clone() };
+    let t2 = Tri { p1: m12.clone(), p2: tri.p2.clone(), p3: m23.clone() };
+    let t3 = Tri { p1: m31.clone(), p2: m23.clone(), p3: tri.p3.clone() };
+    let t4 = Tri { p1: m12, p2: m23, p3: m31 };
+
+    let mut out = Vec::new();
+    for t in [t1, t2, t3, t4] {
+        out.extend(subdivide_tri(&t, levels - 1, radius));
+    }
+    out
 }
 
 fn add_polygon_fan<const N: usize>(
@@ -164,15 +218,28 @@ fn add_polygon_fan<const N: usize>(
     poly: &[usize; N],
     material: &Material,
     flip_winding: bool,
+    subdiv_levels: usize,
+    radius: f64,
 ) {
     let v0 = poly[0];
     for i in 1..(N - 1) {
         let v1 = poly[i];
         let v2 = poly[i + 1];
-        if flip_winding {
-            add_triangle(group, verts, v0, v2, v1, material);
+
+        let (i0, i1, i2) = if flip_winding {
+            (v0, v2, v1)
         } else {
-            add_triangle(group, verts, v0, v1, v2, material);
+            (v0, v1, v2)
+        };
+
+        let base = Tri {
+            p1: verts[i0].clone(),
+            p2: verts[i1].clone(),
+            p3: verts[i2].clone(),
+        };
+
+        for tri in subdivide_tri(&base, subdiv_levels, radius) {
+            add_smooth_triangle(group, &tri, material);
         }
     }
 }
@@ -180,6 +247,8 @@ fn add_polygon_fan<const N: usize>(
 fn main() {
     // If the ball looks "inside-out" (lighting inverted), set this to true.
     const FLIP_WINDING: bool = false;
+    const SUBDIV_LEVELS: usize = 1;
+    const RADIUS: f64 = 1.2;
 
     let mut world = World::new();
 
@@ -196,7 +265,7 @@ fn main() {
     }
     world.add_shape(background);
 
-    let verts = truncated_icosahedron_vertices(1.2);
+    let verts = truncated_icosahedron_vertices(RADIUS);
 
     let mut pent_mat = Material::new();
     pent_mat.color = BLACK.clone();
@@ -218,10 +287,10 @@ fn main() {
     );
 
     for p in PENTAGONS {
-        add_polygon_fan(&mut ball, &verts, p, &pent_mat, FLIP_WINDING);
+        add_polygon_fan(&mut ball, &verts, p, &pent_mat, FLIP_WINDING, SUBDIV_LEVELS, RADIUS);
     }
     for h in HEXAGONS {
-        add_polygon_fan(&mut ball, &verts, h, &hex_mat, FLIP_WINDING);
+        add_polygon_fan(&mut ball, &verts, h, &hex_mat, FLIP_WINDING, SUBDIV_LEVELS, RADIUS);
     }
 
     world.add_shape(ball);
