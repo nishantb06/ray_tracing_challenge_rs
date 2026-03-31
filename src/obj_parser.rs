@@ -7,6 +7,7 @@ use crate::group::Group;
 pub struct ObjParser {
     pub ignored_lines: usize,
     pub vertices: Vec<Tuple>,
+    pub normals: Vec<Tuple>,
     pub default_group: Group,
     pub named_triangles: HashMap<String, Vec<Triangle>>,
     named_groups: HashMap<String, Group>
@@ -17,6 +18,7 @@ impl ObjParser {
         ObjParser{
             ignored_lines: 0, // number of lines ignored, note that we are not storing what lines we are ignoring from the file, neither does it denote topk lines ignored
             vertices: vec![Tuple::point(0.0, 0.0, 0.0)], // to keep the vertices array 1 based
+            normals: vec![Tuple::vector(0.0, 0.0, 0.0)], // index 0 dummy
             default_group: Group::new(),
             named_triangles: HashMap::new(),
             named_groups: HashMap::new(),
@@ -58,7 +60,26 @@ impl ObjParser {
     
                 continue;
             }
-    
+            
+            if let Some(rest) = line.strip_prefix("vn ") {
+                let parts: Vec<&str> = rest.split_whitespace().collect();
+                if parts.len() != 3 {
+                    self.ignored_lines += 1;
+                    continue;
+                }
+            
+                let x = parts[0].parse::<f64>();
+                let y = parts[1].parse::<f64>();
+                let z = parts[2].parse::<f64>();
+            
+                match (x, y, z) {
+                    (Ok(x), Ok(y), Ok(z)) => self.normals.push(Tuple::vector(x, y, z)),
+                    _ => self.ignored_lines += 1,
+                }
+            
+                continue;
+            }
+
             // Later: handle vn/vt/f/g/usemtl/mtllib here.
             if let Some(rest) = line.strip_prefix("f ") {
                 let parts: Vec<&str> = rest.split_whitespace().collect();
@@ -310,5 +331,20 @@ mod tests {
     
         assert!(g.includes(g1_id));
         assert!(g.includes(g2_id));
+    }
+
+    #[test]
+    fn vertex_normal_records() {
+        let file = r#"vn 0 0 1
+    vn 0.707 0 -0.707
+    vn 1 2 3
+    "#;
+    
+        let mut parser = ObjParser::new();
+        parser.parse(file);
+    
+        assert_eq!(parser.normals[1], Tuple::vector(0.0, 0.0, 1.0));
+        assert_eq!(parser.normals[2], Tuple::vector(0.707, 0.0, -0.707));
+        assert_eq!(parser.normals[3], Tuple::vector(1.0, 2.0, 3.0));
     }
 }
