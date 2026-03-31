@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use crate::smooth_triangle::SmoothTriangle;
 use crate::triangle::Triangle;
 use crate::tuple::Tuple;
 use crate::group::Group;
@@ -10,6 +10,7 @@ pub struct ObjParser {
     pub normals: Vec<Tuple>,
     pub default_group: Group,
     pub named_triangles: HashMap<String, Vec<Triangle>>,
+    pub smooth_triangles: Vec<SmoothTriangle>,
     named_groups: HashMap<String, Group>
 }
 
@@ -22,6 +23,7 @@ impl ObjParser {
             default_group: Group::new(),
             named_triangles: HashMap::new(),
             named_groups: HashMap::new(),
+            smooth_triangles: Vec::new(),
         }
     }
 
@@ -80,7 +82,6 @@ impl ObjParser {
                 continue;
             }
 
-            // Later: handle vn/vt/f/g/usemtl/mtllib here.
             if let Some(rest) = line.strip_prefix("f ") {
                 let parts: Vec<&str> = rest.split_whitespace().collect();
                 if parts.len() < 3 {
@@ -88,29 +89,56 @@ impl ObjParser {
                     self.ignored_lines += 1;
                     continue;
                 }
-                // Try to parse all indices for this face.
-                let mut indices = Vec::new();
+
+                // Parse vertex and (optional) normal indices for this face.
+                let mut vertex_indices: Vec<usize> = Vec::new();
+                let mut normal_indices: Vec<Option<usize>> = Vec::new();
                 let mut parse_failed = false;
+
                 for part in parts.iter() {
-                    // .obj faces may have slashes: "1/2/3", "1//3" etc, so take only the first part before '/'
-                    let vertex_idx_str = part.split('/').next().unwrap();
-                    match vertex_idx_str.parse::<usize>() {
-                        Ok(idx) => indices.push(idx),
+                    // .obj faces may be "v", "v/t", "v//n" or "v/t/n"
+                    let mut split = part.split('/');
+                    let v_str = split.next().unwrap_or("");
+                    let _t_str = split.next(); // texture index (ignored)
+                    let n_str = split.next();  // optional normal index
+
+                    // vertex index is mandatory
+                    let v_idx = match v_str.parse::<usize>() {
+                        Ok(idx) => idx,
                         Err(_) => {
                             parse_failed = true;
                             break;
                         }
-                    }
+                    };
+                    vertex_indices.push(v_idx);
+
+                    // normal index is optional
+                    let n_idx = match n_str {
+                        Some(s) if !s.is_empty() => match s.parse::<usize>() {
+                            Ok(idx) => Some(idx),
+                            Err(_) => {
+                                parse_failed = true;
+                                break;
+                            }
+                        },
+                        _ => None,
+                    };
+                    normal_indices.push(n_idx);
                 }
+
                 if parse_failed {
                     self.ignored_lines += 1;
                     continue;
                 }
-                // Fan triangulation: for n vertices, create triangles (v1,v2,v3), (v1,v3,v4), ... (v1,v_{n-1},v_n)
-                for i in 1..(indices.len() - 1) {
-                    let idx1 = indices[0];
-                    let idx2 = indices[i];
-                    let idx3 = indices[i + 1];
+
+                let has_normals = !normal_indices.is_empty() && normal_indices.iter().all(|opt| opt.is_some());
+
+                // Fan triangulation: for n vertices, create triangles
+                // (v1,v2,v3), (v1,v3,v4), ... (v1,v_{n-1},v_n)
+                for i in 1..(vertex_indices.len() - 1) {
+                    let idx1 = vertex_indices[0];
+                    let idx2 = vertex_indices[i];
+                    let idx3 = vertex_indices[i + 1];
                     
                     // Defensive: check validity of indices
                     if idx1 >= self.vertices.len() || idx2 >= self.vertices.len() || idx3 >= self.vertices.len() {
@@ -121,21 +149,55 @@ impl ObjParser {
                     let p1 = self.vertices[idx1].clone();
                     let p2 = self.vertices[idx2].clone();
                     let p3 = self.vertices[idx3].clone();
-                    
-                    let t = Triangle::new(p1.clone(), p2.clone(), p3.clone());
-                    let t_copy = Triangle::new(p1.clone(), p2.clone(), p3.clone());
-                    
-                    if active_group == "default" {
-                        self.default_group.add_child(Box::new(t));
-                        if let Some(tris) = self.named_triangles.get_mut(active_group) {
-                            tris.push(t_copy);
+
+                    if has_normals {
+                        // Build a SmoothTriangle using corresponding normals.
+                        let n_idx1 = normal_indices[0].unwrap();
+                        let n_idx2 = normal_indices[i].unwrap();
+                        let n_idx3 = normal_indices[i + 1].unwrap();
+
+                        // Bounds check for normals
+                        if n_idx1 >= self.normals.len()
+                            || n_idx2 >= self.normals.len()
+                            || n_idx3 >= self.normals.len()
+                        {
+                            self.ignored_lines += 1;
+                            continue;
+                        }
+
+                        let n1 = self.normals[n_idx1].clone();
+                        let n2 = self.normals[n_idx2].clone();
+                        let n3 = self.normals[n_idx3].clone();
+
+                        let s = SmoothTriangle::new(p1.clone(), p2.clone(), p3.clone(), n1.clone(), n2.clone(), n3.clone());
+                        let s_copy = SmoothTriangle::new(p1.clone(), p2.clone(), p3.clone(), n1, n2, n3);
+
+                        // keep typed copy for tests
+                        self.smooth_triangles.push(s_copy);
+
+                        // add to default or named group as `Box<dyn Shape>`
+                        if active_group == "default" {
+                            self.default_group.add_child(Box::new(s));
+                        } else if let Some(group) = self.named_groups.get_mut(active_group) {
+                            group.add_child(Box::new(s));
                         }
                     } else {
-                        if let Some(group) = self.named_groups.get_mut(active_group) {
-                            group.add_child(Box::new(t));
-                        }
-                        if let Some(tris) = self.named_triangles.get_mut(active_group) {
-                            tris.push(t_copy);
+                        // Fallback: plain Triangle without normals.
+                        let t = Triangle::new(p1.clone(), p2.clone(), p3.clone());
+                        let t_copy = Triangle::new(p1.clone(), p2.clone(), p3.clone());
+                        
+                        if active_group == "default" {
+                            self.default_group.add_child(Box::new(t));
+                            if let Some(tris) = self.named_triangles.get_mut(active_group) {
+                                tris.push(t_copy);
+                            }
+                        } else {
+                            if let Some(group) = self.named_groups.get_mut(active_group) {
+                                group.add_child(Box::new(t));
+                            }
+                            if let Some(tris) = self.named_triangles.get_mut(active_group) {
+                                tris.push(t_copy);
+                            }
                         }
                     }
                 }
@@ -336,15 +398,52 @@ mod tests {
     #[test]
     fn vertex_normal_records() {
         let file = r#"vn 0 0 1
-    vn 0.707 0 -0.707
-    vn 1 2 3
-    "#;
-    
+vn 0.707 0 -0.707
+vn 1 2 3
+"#;
+        
         let mut parser = ObjParser::new();
         parser.parse(file);
-    
+        
         assert_eq!(parser.normals[1], Tuple::vector(0.0, 0.0, 1.0));
         assert_eq!(parser.normals[2], Tuple::vector(0.707, 0.0, -0.707));
         assert_eq!(parser.normals[3], Tuple::vector(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn faces_with_normals() {
+        let file = r#"v 0 1 0
+v -1 0 0
+v 1 0 0
+vn -1 0 0
+vn 1 0 0
+vn 0 1 0
+f 1//3 2//1 3//2
+f 1/0/3 2/102/1 3/14/2
+"#;
+
+        let mut parser = ObjParser::new();
+        parser.parse(file);
+
+        assert_eq!(parser.default_group.shapes.len(), 2);
+        assert_eq!(parser.smooth_triangles.len(), 2);
+
+        let t1 = &parser.smooth_triangles[0];
+        let t2 = &parser.smooth_triangles[1];
+
+        assert_eq!(t1.p1, parser.vertices[1]);
+        assert_eq!(t1.p2, parser.vertices[2]);
+        assert_eq!(t1.p3, parser.vertices[3]);
+
+        assert_eq!(t1.n1, parser.normals[3]);
+        assert_eq!(t1.n2, parser.normals[1]);
+        assert_eq!(t1.n3, parser.normals[2]);
+
+        assert_eq!(t2.p1, t1.p1);
+        assert_eq!(t2.p2, t1.p2);
+        assert_eq!(t2.p3, t1.p3);
+        assert_eq!(t2.n1, t1.n1);
+        assert_eq!(t2.n2, t1.n2);
+        assert_eq!(t2.n3, t1.n3);
     }
 }
