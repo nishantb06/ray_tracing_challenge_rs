@@ -57,7 +57,7 @@ fn main() {
         m.specular = 0.9;
         m.shininess = 300.0;
         m.transparency = 0.9;
-        m.reflective = 0.2;
+        m.reflective = 0.4;
         m.refractive_index = 1.5;
     }
 
