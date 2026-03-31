@@ -77,6 +77,7 @@ cargo run --bin ppm_to_png -- media/images_ppm/cover_scene.ppm media/images/cove
 | Hexagon rendered with Groups| ![Hexagon rendered with Groups](media/images/group_hexagon.png) |
 | Dodecahedron, rendered with triangles | ![Dodecahedron](media/images/dodecahedron.png) |
 | Football (truncated icosahedron) | ![Dodecahedron](media/images/football.png) |
+| Football (truncated icosahedron + Smooth triangles) | ![Dodecahedron](media/images/smooth_triangles_football.png) |
 | Teopot (parse and render any .obj file) | ![Dodecahedron](media/images/teapot.png) |
 | Cottage (https://free3d.com/3d-model/abandoned-cottage-house-825251.html) | ![Cottage](media/images/cottage.png) |
 
