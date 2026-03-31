@@ -47,7 +47,7 @@ impl Shape for Sphere {
         ])
     }
 
-    fn local_normal_at(&self, local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, local_point: &Tuple,_hit: Option<&Intersection>) -> Tuple {
         // Just the vector from origin — no transforms, normal_at handles those
         local_point - &Tuple::point(0.0, 0.0, 0.0)
     }
@@ -150,21 +150,21 @@ mod tests {
     #[test]
     fn normal_on_sphere_at_point_on_x_axis() {
         let s = Sphere::new();
-        let n = s.local_normal_at(&Tuple::point(1.0, 0.0, 0.0));
+        let n = s.local_normal_at(&Tuple::point(1.0, 0.0, 0.0),None);
         assert!(n.is_equal(&Tuple::vector(1.0, 0.0, 0.0)));
     }
 
     #[test]
     fn normal_on_sphere_at_point_on_y_axis() {
         let s = Sphere::new();
-        let n = s.local_normal_at(&Tuple::point(0.0, 1.0, 0.0));
+        let n = s.local_normal_at(&Tuple::point(0.0, 1.0, 0.0),None);
         assert!(n.is_equal(&Tuple::vector(0.0, 1.0, 0.0)));
     }
 
     #[test]
     fn normal_on_sphere_at_point_on_z_axis() {
         let s = Sphere::new();
-        let n = s.local_normal_at(&Tuple::point(0.0, 0.0, 1.0));
+        let n = s.local_normal_at(&Tuple::point(0.0, 0.0, 1.0),None);
         assert!(n.is_equal(&Tuple::vector(0.0, 0.0, 1.0)));
     }
 
@@ -172,7 +172,7 @@ mod tests {
     fn normal_on_sphere_at_nonaxial_point() {
         let s = Sphere::new();
         let v = (3.0_f64).sqrt() / 3.0;
-        let n = s.local_normal_at(&Tuple::point(v, v, v));
+        let n = s.local_normal_at(&Tuple::point(v, v, v),None);
         assert!(n.is_equal(&Tuple::vector(v, v, v)));
     }
 
@@ -180,7 +180,7 @@ mod tests {
     fn normal_is_a_normalized_vector() {
         let s = Sphere::new();
         let v = (3.0_f64).sqrt() / 3.0;
-        let n = s.local_normal_at(&Tuple::point(v, v, v));
+        let n = s.local_normal_at(&Tuple::point(v, v, v),None);
         assert!(n.is_equal(&n.normalize()));
     }
 

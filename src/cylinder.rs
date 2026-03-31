@@ -100,7 +100,7 @@ impl Shape for Cylinder {
         Intersections::new(xs)
     }
 
-    fn local_normal_at(&self, local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, local_point: &Tuple,_hit: Option<&Intersection>) -> Tuple {
         let dist = local_point.x * local_point.x + local_point.z * local_point.z;
 
         if dist < 1.0 && local_point.y >= self.maximum - EPSILON {
@@ -243,7 +243,7 @@ mod tests {
         let cyl = Cylinder::new();
     
         for (i, tc) in cases.iter().enumerate() {
-            let n = cyl.local_normal_at(&tc.point);
+            let n = cyl.local_normal_at(&tc.point,None);
             assert!(
                 n.is_equal(&tc.normal),
                 "case {}: expected normal {:?}, got {:?}",
@@ -431,7 +431,7 @@ mod tests {
         cyl.closed = true;
     
         for (i, tc) in cases.iter().enumerate() {
-            let n = cyl.local_normal_at(&tc.point);
+            let n = cyl.local_normal_at(&tc.point,None);
             assert!(
                 n.is_equal(&tc.normal),
                 "case {}: expected normal {:?}, got {:?}",

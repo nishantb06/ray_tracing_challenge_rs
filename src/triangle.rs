@@ -59,10 +59,10 @@ impl Shape for Triangle {
             return Intersections::new(vec![]);
         }
         let t_hit = f * self.e2.dot(&origin_cross_e1);
-        Intersections::new(vec![Intersection::new(t_hit, self)])
+        Intersections::new(vec![Intersection::intersection_with_uv(t_hit, self, u, v)])
     }
 
-    fn local_normal_at(&self, _local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, _local_point: &Tuple,_hit: Option<&Intersection>) -> Tuple {
         return self.normal.clone();
     }
 }
@@ -101,9 +101,9 @@ mod tests {
             Tuple::point(1.0, 0.0, 0.0),
         );
     
-        let n1 = t.local_normal_at(&Tuple::point(0.0, 0.5, 0.0));
-        let n2 = t.local_normal_at(&Tuple::point(-0.5, 0.75, 0.0));
-        let n3 = t.local_normal_at(&Tuple::point(0.5, 0.25, 0.0));
+        let n1 = t.local_normal_at(&Tuple::point(0.0, 0.5, 0.0),None);
+        let n2 = t.local_normal_at(&Tuple::point(-0.5, 0.75, 0.0),None);
+        let n3 = t.local_normal_at(&Tuple::point(0.5, 0.25, 0.0),None);
     
         assert_eq!(n1, t.normal);
         assert_eq!(n2, t.normal);

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::intersection::Intersections;
+use crate::intersection::{Intersection, Intersections};
 use crate::ray::Ray;
 use crate::shape::{Shape, ShapeData};
 use crate::tuple::Tuple;
@@ -59,7 +59,7 @@ impl Shape for Group {
         Intersections::new(all_intersections)
     }
 
-    fn local_normal_at(&self, _local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, _local_point: &Tuple,_hit: Option<&Intersection>) -> Tuple {
         panic!(
             "Group has no surface: intersections should use the leaf shape; \
              use shape_normal_at(leaf, resolve, world_point) instead"

@@ -19,3 +19,4 @@ pub mod cone;
 pub mod group;
 pub mod triangle;
 pub mod obj_parser;
+pub mod smooth_triangle;

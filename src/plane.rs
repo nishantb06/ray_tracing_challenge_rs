@@ -29,7 +29,7 @@ impl Shape for Plane {
         Intersections::new(vec![Intersection::new(t, self)])
     }
 
-    fn local_normal_at(&self, _local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, _local_point: &Tuple,_hit: Option<&Intersection>) -> Tuple {
         Tuple::vector(0.0, 1.0, 0.0)
     }
 }
@@ -55,9 +55,9 @@ mod tests {
     #[test]
     fn the_normal_of_a_plane_is_constant_everywhere() {
         let p = plane();
-        let n1 = p.local_normal_at(&Tuple::point(0.0, 0.0, 0.0));
-        let n2 = p.local_normal_at(&Tuple::point(10.0, 0.0, -10.0));
-        let n3 = p.local_normal_at(&Tuple::point(-5.0, 0.0, 150.0));
+        let n1 = p.local_normal_at(&Tuple::point(0.0, 0.0, 0.0),None);
+        let n2 = p.local_normal_at(&Tuple::point(10.0, 0.0, -10.0),None);
+        let n3 = p.local_normal_at(&Tuple::point(-5.0, 0.0, 150.0),None);
         assert!(n1.is_equal(&Tuple::vector(0.0, 1.0, 0.0)));
         assert!(n2.is_equal(&Tuple::vector(0.0, 1.0, 0.0)));
         assert!(n3.is_equal(&Tuple::vector(0.0, 1.0, 0.0)));

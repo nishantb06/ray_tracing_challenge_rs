@@ -60,7 +60,7 @@ impl Shape for Cube {
         Intersections::new(vec![Intersection::new(tmin, self), Intersection::new(tmax, self)])
     }
 
-    fn local_normal_at(&self, local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, local_point: &Tuple,_hit: Option<&Intersection>) -> Tuple {
         let maxc = local_point.x.abs().max(local_point.y.abs()).max(local_point.z.abs());
 
         if maxc == local_point.x.abs() {
@@ -263,7 +263,7 @@ mod tests {
         let c = Cube::new();
     
         for (i, tc) in cases.iter().enumerate() {
-            let n = c.local_normal_at(&tc.point);
+            let n = c.local_normal_at(&tc.point,None);
             assert!(
                 n.is_equal(&tc.normal),
                 "case {}: expected {:?}, got {:?}",

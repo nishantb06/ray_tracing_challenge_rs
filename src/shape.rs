@@ -5,6 +5,7 @@ use crate::material::Material;
 use crate::ray::Ray;
 use crate::tuple::Tuple;
 use std::fmt::Debug;
+use crate::intersection::Intersection;
 
 static NEXT_SHAPE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -42,7 +43,8 @@ pub trait Shape: Debug {
 
     // Shapes implement these two in object space only:
     fn local_intersect<'a>(&'a self, local_ray: &Ray) -> Intersections<'a>;
-    fn local_normal_at(&self, local_point: &Tuple) -> Tuple;
+    fn local_normal_at(&self, local_point: &Tuple, hit: Option<&Intersection>) -> Tuple;
+
 
     // These are free default impls — Sphere/Plane get them for free:
     fn intersect<'a>(&'a self, ray: &Ray) -> Intersections<'a> {
@@ -53,7 +55,8 @@ pub trait Shape: Debug {
     fn normal_at(&self, world_point: &Tuple) -> Tuple {
         let sd = self.shape_data();
         let local_point = &sd.transform_inverse * world_point;
-        let local_normal = self.local_normal_at(&local_point);
+        // default: no hit info, so pass None
+        let local_normal = self.local_normal_at(&local_point, None);
         let mut world_normal = &sd.transform_inverse.transpose() * &local_normal;
         world_normal.w = 0.0;
         world_normal.normalize()
@@ -113,7 +116,18 @@ pub fn shape_normal_at<'a>(
     world_point: &Tuple,
 ) -> Tuple {
     let local_point = world_to_object(shape, resolve_parent, world_point);
-    let local_normal = shape.local_normal_at(&local_point);
+    let local_normal = shape.local_normal_at(&local_point,None);
+    normal_to_world(shape, resolve_parent, &local_normal)
+}
+
+pub fn shape_normal_at_with_hit<'a>(
+    shape: &'a dyn Shape,
+    resolve_parent: &impl Fn(u64) -> Option<&'a dyn Shape>,
+    world_point: &Tuple,
+    hit: Option<&Intersection<'a>>,
+) -> Tuple {
+    let local_point = world_to_object(shape, resolve_parent, world_point);
+    let local_normal = shape.local_normal_at(&local_point, hit);
     normal_to_world(shape, resolve_parent, &local_normal)
 }
 
@@ -147,7 +161,7 @@ pub mod test_support {
             Intersections::new(vec![])
         }
 
-        fn local_normal_at(&self, local_point: &Tuple) -> Tuple {
+        fn local_normal_at(&self, local_point: &Tuple, _hit: Option<&Intersection>) -> Tuple {
             Tuple::vector(local_point.x, local_point.y, local_point.z)
         }
     }

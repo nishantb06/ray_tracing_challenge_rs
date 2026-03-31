@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::ray::Ray;
-use crate::shape::shape_normal_at;
+use crate::shape::shape_normal_at_with_hit;
 use crate::tuple::Tuple;
 use crate::utils::EPSILON;
 use crate::shape::Shape;
@@ -10,6 +10,10 @@ use crate::shape::Shape;
 pub struct Intersection<'a> {
     pub t: f64,
     pub object: &'a dyn Shape,
+
+    // New: barycentric coordinates (only meaningful for triangles)
+    pub u: Option<f64>,
+    pub v: Option<f64>,
 }
 
 impl fmt::Debug for Intersection<'_> {
@@ -30,7 +34,11 @@ pub struct Intersections<'a> {
 #[allow(dead_code)]
 impl<'a> Intersection<'a> {
     pub fn new(t: f64, object: &'a dyn Shape) -> Self {
-        Intersection { t, object }
+        Intersection { t, object, u: None, v: None}
+    }
+    
+    pub fn intersection_with_uv(t: f64, object: &'a dyn Shape, u: f64, v: f64) -> Self {
+        Intersection { t, object, u: Some(u), v: Some(v) }
     }
 }
 
@@ -58,7 +66,12 @@ pub fn prepare_computations<'a>(
 ) -> Computations<'a> {
     // existing geometric precomputations
     let point = ray.position(intersection.t);
-    let mut normal_v = shape_normal_at(intersection.object, resolve_parent, &point);
+    let mut normal_v = shape_normal_at_with_hit(
+        intersection.object,
+        resolve_parent,
+        &point,
+        Some(intersection),
+    );
     let eye_v = -&ray.direction;
     let mut inside = false;
 
@@ -162,7 +175,9 @@ pub fn schlick(comps: &Computations) -> f64 {
 mod tests {
     use super::*;
     use crate::sphere::Sphere;
-    
+    use crate::plane::Plane;
+    use crate::utils::equal;
+
     fn no_parent<'a>(_id: u64) -> Option<&'a dyn Shape> {
         None
     }
@@ -261,8 +276,6 @@ mod tests {
         assert!(comps.inside);
         assert!(comps.normal_vector.is_equal(&Tuple::vector(0.0, 0.0, -1.0)));
     }
-
-    use crate::plane::Plane;
 
     #[test]
     fn precomputing_the_reflection_vector() {
@@ -579,5 +592,21 @@ mod tests {
 
         assert!(comps.normal_vector.is_equal(&expected));
         assert!(comps.inside);
+    }
+
+    #[test]
+    fn an_intersection_can_encapsulate_u_and_v() {
+        use crate::triangle::Triangle;
+    
+        let s = Triangle::new(
+            Tuple::point(0.0, 1.0, 0.0),
+            Tuple::point(-1.0, 0.0, 0.0),
+            Tuple::point(1.0, 0.0, 0.0),
+        );
+    
+        let i = Intersection::intersection_with_uv(3.5, &s, 0.2, 0.4);
+    
+        assert!(equal(i.u.unwrap(), 0.2));
+        assert!(equal(i.v.unwrap(), 0.4));
     }
 }

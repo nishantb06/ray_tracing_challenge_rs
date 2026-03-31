@@ -283,3 +283,20 @@ cargo run --bin ppm_to_png -- media/images/cover_scene.ppm media/images/cover_sc
 
 Note that the extents are exclusive, meaning if the cylinder is truncated at
 y=2, the cylinder extends up to—but not including—that limit.
+
+Fortunately, there’s a handy technique called normal interpolation, which
+works by assigning a normal vector to each vertex. Then, those vertex normals
+are used to interpolate the normal vector at any given point on the triangle,
+basically lying about the normal vector to trick the shading routines! Done
+correctly, the result can mimic a flawlessly curved surface. The following figure
+shows that high-resolution teapot again, rendered without normal interpolation
+on the left, and with it on the right.
+
+An intersection record may have u and v properties, to help identify where on
+a triangle the intersection occurred, relative to the triangle s corners.
+These u and v properties will be floating point numbers between 0 and 1. They
+are specific to triangles, so intersections with any other shape won’t use them.
+Still, for triangles—and especially for smooth triangles—they’re relevant. The
+following test demonstrates how to construct an intersection record that
+encapsulates the u and v properties, using a new intersection_with_uv(t, shape, u, v)
+function.

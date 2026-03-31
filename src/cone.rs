@@ -110,7 +110,7 @@ impl Shape for Cone {
         Intersections::new(xs)
     }
 
-    fn local_normal_at(&self, local_point: &Tuple) -> Tuple {
+    fn local_normal_at(&self, local_point: &Tuple, _hit: Option<&Intersection>) -> Tuple {
         let dist = local_point.x * local_point.x + local_point.z * local_point.z;
 
         // Check if the point is on a cap (only when closed)
@@ -291,7 +291,7 @@ mod tests {
         let shape = Cone::new();
 
         for (i, tc) in cases.iter().enumerate() {
-            let n = shape.local_normal_at(&tc.point);
+            let n = shape.local_normal_at(&tc.point,None);
             assert!(
                 n.is_equal(&tc.normal),
                 "case {}: expected normal {:?}, got {:?}",
