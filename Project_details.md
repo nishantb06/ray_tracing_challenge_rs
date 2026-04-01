@@ -300,3 +300,43 @@ Still, for triangles—and especially for smooth triangles—they’re relevant.
 following test demonstrates how to construct an intersection record that
 encapsulates the u and v properties, using a new intersection_with_uv(t, shape, u, v)
 function.
+
+These models are not of uniform size and are rarely centered conveniently
+at the origin. My advice is to have your OBJ parser print the minimum
+and maximum extents of each model it imports, which you can then use
+to translate and scale the model in your scene.
+• These models often have the y and z axes swapped from what this book
+presents, with z being the “up” axis instead of y. If you find this to be the
+case, a quick rotation around x by -π⁄2 should do the trick.
+
+Intersecting a ray with a CSG
+shape begins just like intersecting one with a Group: you first intersect the ray
+with the shape’s children. Then, you iterate over the resulting intersection
+records, tracking which ones are inside which child and filtering out those
+that don’t conform to the current operation. The resulting list of intersections
+is then returned.
+
+#TODO
+remember that intersecting a ray with a CSG shape preserves the original
+intersections with the original primitive shapes. Think about how your ray
+tracer determines the color to use for a given intersection. In Chapter 6, Light
+and Shading, on page 75, you stored a material structure on each object and
+used the material from the intersected object to determine what color the
+intersection should be.
+This still holds true with CSG intersections. Consider again this
+illustration of a red sphere subtracted from a yellow cube.
+The faces of the cube remain yellow, but the portion that was
+subtracted away retains the red of the sphere! This is because
+those intersections were from the sphere and not the cube and so keep the
+original coloring of the sphere.
+This works even with reflective and transparent surfaces, which means you
+can make certain faces “disappear” by making their corresponding shape
+transparent. By default, transparent surfaces will still cast shadows, but if
+you hark back to Putting It Together, on page 165, you’ll see one of the
+optional things to consider is for shapes to “opt out” of casting shadows.
+Implementing that, and then subtracting transparent shapes from solids, lets
+you do nifty things like this sphere with a wedge removed from it:
+You can form the wedge by rotating a cube 45 degrees around the y axis and
+then making it narrower by scaling it smaller in z. Make the wedge transparent,
+position it so it intersects the sphere, and then subtract it from the sphere.
+It’s a fun trick!
