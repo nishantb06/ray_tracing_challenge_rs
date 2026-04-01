@@ -4,6 +4,7 @@ use ray_tracing_challenge_rs::csg::{CSG, CSGOperation};
 use ray_tracing_challenge_rs::cube::Cube;
 use ray_tracing_challenge_rs::light::PointLight;
 use ray_tracing_challenge_rs::material::Material;
+use ray_tracing_challenge_rs::matrix::Matrix;
 use ray_tracing_challenge_rs::pattern::{CheckersPattern, Pattern};
 use ray_tracing_challenge_rs::plane::Plane;
 use ray_tracing_challenge_rs::shape::Shape;
@@ -14,6 +15,37 @@ use ray_tracing_challenge_rs::transformation::{
 use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
 use std::f64::consts::FRAC_PI_3;
+
+/// Half-size of the die in object space after `scaling(half, half, half)` (unit cube is ±1).
+const DIE_HALF: f64 = 0.65;
+/// Tiny gap so stacked dice do not share the exact same surface (reduces overlap / z-fighting).
+const STACK_GAP: f64 = 0.02;
+
+fn rot_scale_matrix(yaw: f64, pitch: f64, roll: f64, half: f64) -> Matrix {
+    &(&(&rotation_y(yaw) * &rotation_x(pitch)) * &rotation_z(roll)) * &scaling(half, half, half)
+}
+
+/// Min/max world Y of the eight corners of the unit cube (±1,±1,±1) after `rs` (rotation + scale only).
+fn cube_y_extents_after_rot_scale(rs: &Matrix) -> (f64, f64) {
+    let mut lo = f64::INFINITY;
+    let mut hi = f64::NEG_INFINITY;
+    for sx in [-1.0_f64, 1.0] {
+        for sy in [-1.0_f64, 1.0] {
+            for sz in [-1.0_f64, 1.0] {
+                let p = Tuple::point(sx, sy, sz);
+                let w = rs * &p;
+                lo = lo.min(w.y);
+                hi = hi.max(w.y);
+            }
+        }
+    }
+    (lo, hi)
+}
+
+/// Full die transform: `translation * rotation_y * rotation_x * rotation_z * scaling`.
+fn die_transform(tx: f64, ty: f64, tz: f64, rs: &Matrix) -> Matrix {
+    &translation(tx, ty, tz) * rs
+}
  
 fn pip_uv_for_number(n: u8, o: f64) -> Vec<(f64, f64)> {
     // Standard pip patterns on a face in (u,v) coordinates.
@@ -134,17 +166,37 @@ fn main() {
     }
     world.add_shape(floor);
  
-    // Dice (CSG): build in local space then transform each instance.
+    // Dice (CSG): same half-extent; bottom two are floor-aligned, green sits on the higher of the two tops.
+    let rs_blue = rot_scale_matrix(-0.32, 0.12, 0.0, DIE_HALF);
+    let (lo_b, hi_b) = cube_y_extents_after_rot_scale(&rs_blue);
+    let ty_blue = -lo_b;
+    let tx_blue = -1.15;
+    let tz_blue = -0.08;
+
+    let rs_red = rot_scale_matrix(0.48, -0.08, 0.0, DIE_HALF);
+    let (lo_r, hi_r) = cube_y_extents_after_rot_scale(&rs_red);
+    let ty_red = -lo_r;
+    let tx_red = 0.88;
+    let tz_red = 0.40;
+
+    let top_y = (ty_blue + hi_b).max(ty_red + hi_r) + STACK_GAP;
+
+    let rs_green = rot_scale_matrix(0.14, 0.0, 0.22, DIE_HALF);
+    let (lo_g, _) = cube_y_extents_after_rot_scale(&rs_green);
+    let ty_green = top_y - lo_g;
+    let tx_green = 0.5 * (tx_blue + tx_red) + 0.02;
+    let tz_green = 0.5 * (tz_blue + tz_red) - 0.12;
+
     let mut die_blue = build_die(Color::new(0.20, 0.25, 0.85));
-    die_blue.set_transform(&(&(&translation(-1.2, 0.65, 0.0) * &rotation_y(-0.35)) * &rotation_x(0.20)) * &scaling(0.65, 0.65, 0.65));
+    die_blue.set_transform(die_transform(tx_blue, ty_blue, tz_blue, &rs_blue));
     world.objects.push(die_blue);
  
     let mut die_red = build_die(Color::new(0.75, 0.25, 0.30));
-    die_red.set_transform(&(&(&translation(0.55, 0.65, 0.35) * &rotation_y(0.55)) * &rotation_x(-0.10)) * &scaling(0.65, 0.65, 0.65));
+    die_red.set_transform(die_transform(tx_red, ty_red, tz_red, &rs_red));
     world.objects.push(die_red);
  
     let mut die_green = build_die(Color::new(0.20, 0.70, 0.35));
-    die_green.set_transform(&(&(&translation(0.10, 1.55, -0.25) * &rotation_y(0.15)) * &rotation_z(0.25)) * &scaling(0.65, 0.65, 0.65));
+    die_green.set_transform(die_transform(tx_green, ty_green, tz_green, &rs_green));
     world.objects.push(die_green);
  
     world.lights = vec![
