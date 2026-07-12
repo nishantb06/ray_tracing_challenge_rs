@@ -63,6 +63,12 @@ impl Camera {
 
     pub fn render(&self, world: &World) -> Canvas {
         const NUM_THREADS: usize = 8;
+        // let num_threads = std::thread::available_parallelism()
+        //     .map(|n| n.get())
+        //     .unwrap_or(8); // fallback if the count can't be determined
+        // // Can use the above instead for a dynamic number of threads, 1 thread per core.
+        // NUM_THREADS = num_threads;
+        println!("Using {} threads", NUM_THREADS);
 
         let mut image = Canvas::new(self.hsize, self.vsize);
 
