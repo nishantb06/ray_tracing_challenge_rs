@@ -24,7 +24,7 @@ impl PatternData {
     }
 }
 
-pub trait Pattern: Debug {
+pub trait Pattern: Debug + Send + Sync {
     fn pattern_data(&self) -> &PatternData;
     fn pattern_data_mut(&mut self) -> &mut PatternData;
     fn pattern_at(&self, point: &Tuple) -> Color;
