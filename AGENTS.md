@@ -21,3 +21,8 @@ This is a single Rust crate (`ray_tracing_challenge_rs`): a CPU ray tracer/3D re
   cargo run --release --bin ppm_to_png -- media/images_ppm/checker_sphere.ppm media/images/checker_sphere.png
   ```
 - Use `--release` for renders; some scenes are compute-heavy and are very slow in the default debug profile.
+
+### Render benchmark / regression test
+- `tests/render_benchmark.rs` renders a fixed sphere scene via the public API, times the pipeline from `camera.render` through `canvas_to_ppm`, and compares the output pixel-by-pixel against the committed golden file `tests/fixtures/benchmark_sphere.ppm`.
+- The golden `.ppm` is force-added because `*.ppm` is gitignored. After an *intentional* change to rendered output, regenerate it with `UPDATE_REFERENCE=1 cargo test --release --test render_benchmark`.
+- Measure timing (harness hides stdout otherwise) with: `cargo test --release --test render_benchmark -- --nocapture`. Always use `--release` for meaningful numbers.
