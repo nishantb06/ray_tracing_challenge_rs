@@ -4,7 +4,6 @@ use crate::ray::Ray;
 use crate::tuple::Tuple;
 use crate::world::{World, color_at};
 use crate::utils::MAX_RECURSION_DEPTH;
-use crate::canvas::Color;
 use std::thread;
 
 #[derive(Debug)]
@@ -17,6 +16,8 @@ pub struct Camera {
     pub pixel_size: f64,
     pub half_width: f64,
     pub half_height: f64,
+    /// When true, `render` computes `transform.inverse_gauss_jordan()` once and reuses it for every pixel.
+    pub cache_inverse_in_render: bool,
 }
 
 #[allow(dead_code)]
@@ -39,10 +40,16 @@ impl Camera {
             pixel_size,
             half_width,
             half_height,
+            cache_inverse_in_render: true,
         }
     }
 
     pub fn ray_for_pixel(&self, px: f64, py: f64) -> Ray {
+        let inv = self.transform.inverse_gauss_jordan();
+        self.ray_for_pixel_with_inverse(&inv, px, py)
+    }
+
+    fn ray_for_pixel_with_inverse(&self, inv: &Matrix, px: f64, py: f64) -> Ray {
         // the offset from the edge of the canvas to the pixel's center
         let xoffset = (px + 0.5) * self.pixel_size;
         let yoffset = (py + 0.5) * self.pixel_size;
@@ -55,9 +62,8 @@ impl Camera {
         // using the camera matrix, transform the canvas point and the origin,
         // and then compute the ray's direction vector.
         // (remember that the canvas is at z=-1)
-        let inv = self.transform.inverse_gauss_jordan();
-        let pixel = &inv * &Tuple::point(world_x, world_y, -1.0);
-        let origin = &inv * &Tuple::point(0.0, 0.0, 0.0);
+        let pixel = inv * &Tuple::point(world_x, world_y, -1.0);
+        let origin = inv * &Tuple::point(0.0, 0.0, 0.0);
         let direction = (&pixel - &origin).normalize();
 
         return Ray { origin, direction };
@@ -65,31 +71,47 @@ impl Camera {
 
     pub fn render(&self, world: &World) -> Canvas {
         let mut image = Canvas::new(self.hsize, self.vsize);
-        // Each thread returns (row_index, colors_for_that_row)
-        let rows: Vec<(usize, Vec<Color>)> = thread::scope(|scope| {
-            let handles: Vec<_> = (0..self.vsize)
-                .map(|y| {
-                    scope.spawn(move || {
-                        let mut row = Vec::with_capacity(self.hsize);
-                        for x in 0..self.hsize {
-                            let ray = self.ray_for_pixel(x as f64, y as f64);
-                            row.push(color_at(world, &ray, MAX_RECURSION_DEPTH));
+        let width = self.hsize;
+        let height = self.vsize;
+        let inv = if self.cache_inverse_in_render {
+            Some(self.transform.inverse_gauss_jordan())
+        } else {
+            None
+        };
+        let pixels_addr = image.pixels.as_mut_ptr() as usize;
+        let num_threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .min(height.max(1));
+        let rows_per_thread = height.div_ceil(num_threads);
+
+        thread::scope(|scope| {
+            let inv_ref = inv.as_ref();
+            for t in 0..num_threads {
+                scope.spawn(move || {
+                    let start_y = t * rows_per_thread;
+                    let end_y = ((t + 1) * rows_per_thread).min(height);
+                    for y in start_y..end_y {
+                        // SAFETY: each worker writes rows in its own contiguous [start_y, end_y)
+                        // chunk, disjoint from all other workers.
+                        let row = unsafe {
+                            let ptr = pixels_addr as *mut crate::canvas::Color;
+                            std::slice::from_raw_parts_mut(ptr.add(y * width), width)
+                        };
+                        for x in 0..width {
+                            let ray = match inv_ref {
+                                Some(inv) => {
+                                    self.ray_for_pixel_with_inverse(inv, x as f64, y as f64)
+                                }
+                                None => self.ray_for_pixel(x as f64, y as f64),
+                            };
+                            row[x] = color_at(world, &ray, MAX_RECURSION_DEPTH);
                         }
-                        (y, row)
-                    })
-                })
-                .collect();
-            handles
-                .into_iter()
-                .map(|h| h.join().expect("render thread panicked"))
-                .collect()
-        });
-        // Single-threaded write — no sharing of &mut image
-        for (y, row) in rows {
-            for (x, color) in row.into_iter().enumerate() {
-                image.write_pixel(x, y, color);
+                    }
+                });
             }
-        }
+        });
+
         image
     }
 }
