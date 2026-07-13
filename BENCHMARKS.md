@@ -12,3 +12,12 @@ remarks: spawning so many threads has a huge overhead cost!
 [benchmark] rendered 400x200 sphere scene to PPM in 97.434ms (821.1 pixels/ms)
 remarks: makes as many threads as the number of chunks = number of cores then work inside each thread is sequential. This has a similar baseline as the AI provided optimisation
 
+#### Caching the inverse matrix of the camera transform 
+##### Speed up 5.2x
+commit :273f6e41d6ee0a3cc0d9b19de3e80718038adb5a
+[benchmark] rendered 400x200 sphere scene to PPM in 61.053ms (1310.3 pixels/ms)
+
+#### Letting Rayon handle the multi threading since its dynamic work stealing algo will be better for uneven work while ray tracing. Each pixel will not have the same work
+##### Speedup (6x)
+[benchmark] rendered 400x200 sphere scene to PPM 
+in 52.241ms (1531.4 pixels/ms)

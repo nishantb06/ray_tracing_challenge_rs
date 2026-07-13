@@ -4,7 +4,7 @@ use crate::ray::Ray;
 use crate::tuple::Tuple;
 use crate::world::{World, color_at};
 use crate::utils::MAX_RECURSION_DEPTH;
-use std::thread;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -77,50 +77,14 @@ impl Camera {
         let coordinates: Vec<(usize, usize)> = (0..self.hsize)
             .flat_map(|x| (0..self.vsize).map(move |y| (x, y)))
             .collect();
-        
-        let num_threads = thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1);
-        
-        let chunk_size = coordinates.len().div_ceil(num_threads);
-        // let handles: Vec<_> = thread::scope(|scope| {
-        //     coordinates
-        //         .iter()
-        //         .map(|&(x, y)| {
-        //             scope.spawn(move || {
-        //                 let ray = self.ray_for_pixel(x as f64, y as f64);
-        //                 let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
-        //                 color
-        //             })
-        //         })
-        //         .collect::<Vec<_>>()
-        // }); // scope blocks here until all threads finish
-        
-        // let colors: Vec<Color> = handles
-        //     .into_iter()
-        //     .map(|handle| handle.join().unwrap())
-        //     .collect();
-        let colors: Vec<Color> = thread::scope(|scope| {
-            let handles: Vec<_> = coordinates
-                .chunks(chunk_size)
-                .map(|chunk| {
-                    scope.spawn(move || {
-                        chunk
-                            .iter()
-                            .map(|&(x, y)| {
-                                let ray = self.ray_for_pixel(x as f64, y as f64);
-                                color_at(world, &ray, MAX_RECURSION_DEPTH)
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                })
-                .collect();
-    
-            handles
-                .into_iter()
-                .flat_map(|handle| handle.join().unwrap())
-                .collect()
-        });
+
+        let colors: Vec<Color> = coordinates
+            .par_iter()
+            .map(|&(x, y)| {
+                let ray = self.ray_for_pixel(x as f64, y as f64);
+                color_at(world, &ray, MAX_RECURSION_DEPTH)
+            })
+            .collect();
 
         for (&(x, y), color) in coordinates.iter().zip(colors) {
             image.write_pixel(x, y, color);
