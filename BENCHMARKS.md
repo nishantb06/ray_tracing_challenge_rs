@@ -24,5 +24,10 @@ commit : 5d3a6999c7d09ba072affec119ee3f301f368eaf
 
 #### Canvas exposes a mutable pixel slice and the result of the computations is written there directly avoiding double allocations of memory
 ##### Speedup (6.25x)
+commit: 92c72cabb5b194ee2586ee3a47f37a5f80b167e4
 [benchmark] rendered 400x200 sphere scene to PPM in 51.271ms (1560.3 pixels/ms)
+
+#### ShapeData now caches transform_inverse_transpose in set_transform, and normal_at / normal_to_world use that instead of calling .transpose() each time.
+##### Speedup (7x speedup)
+[benchmark] rendered 400x200 sphere scene to PPM in 45.732ms (1749.3 pixels/ms)
 

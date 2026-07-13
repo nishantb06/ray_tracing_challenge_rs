@@ -15,6 +15,7 @@ pub struct ShapeData {
     pub transform: Matrix,
     pub material: Material,
     pub transform_inverse: Matrix,  // cache this!
+    pub transform_inverse_transpose: Matrix,
     pub parent: Option<u64>,
 }
 
@@ -22,16 +23,19 @@ impl ShapeData {
     pub fn new() -> Self {
         let transform = Matrix::identity(4);
         let transform_inverse = Matrix::identity(4);
+        let transform_inverse_transpose = Matrix::identity(4);
         ShapeData {
             id: NEXT_SHAPE_ID.fetch_add(1, Ordering::Relaxed),
             transform,
             material: Material::new(),
             transform_inverse,
+            transform_inverse_transpose,
             parent: None,
         }
     }
     pub fn set_transform(&mut self, t: Matrix) {
         self.transform_inverse = t.inverse_gauss_jordan();
+        self.transform_inverse_transpose = self.transform_inverse.transpose();
         self.transform = t;
     }
 }
@@ -57,7 +61,7 @@ pub trait Shape: Debug + Send + Sync {
         let local_point = &sd.transform_inverse * world_point;
         // default: no hit info, so pass None
         let local_normal = self.local_normal_at(&local_point, None);
-        let mut world_normal = &sd.transform_inverse.transpose() * &local_normal;
+        let mut world_normal = &sd.transform_inverse_transpose * &local_normal;
         world_normal.w = 0.0;
         world_normal.normalize()
     }
@@ -91,14 +95,14 @@ pub fn world_to_object<'a>(
 }
 
 /// Recursively transform a **object-space** normal into **world space**,
-/// walking up the parent chain. Uses cached `transform_inverse` and
-/// `transpose(transform_inverse)` ≡ transpose(inverse(transform)) on the linear part.
+/// walking up the parent chain. Uses cached `transform_inverse_transpose`
+/// ≡ transpose(inverse(transform)) on the linear part.
 pub fn normal_to_world<'a>(
     shape: &'a dyn Shape,
     resolve_parent: &impl Fn(u64) -> Option<&'a dyn Shape>,
     normal: &Tuple,
 ) -> Tuple {
-    let mut n = &shape.shape_data().transform_inverse.transpose() * normal;
+    let mut n = &shape.shape_data().transform_inverse_transpose * normal;
     n.w = 0.0;
     n = n.normalize();
     if let Some(parent_id) = shape.shape_data().parent {
