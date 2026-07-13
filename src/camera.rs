@@ -4,6 +4,8 @@ use crate::ray::Ray;
 use crate::tuple::Tuple;
 use crate::world::{World, color_at};
 use crate::utils::MAX_RECURSION_DEPTH;
+use crate::canvas::Color;
+use std::thread;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -63,10 +65,28 @@ impl Camera {
 
     pub fn render(&self, world: &World) -> Canvas {
         let mut image = Canvas::new(self.hsize, self.vsize);
-        for y in 0..self.vsize {
-            for x in 0..self.hsize {
-                let ray = self.ray_for_pixel(x as f64, y as f64);
-                let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
+        // Each thread returns (row_index, colors_for_that_row)
+        let rows: Vec<(usize, Vec<Color>)> = thread::scope(|scope| {
+            let handles: Vec<_> = (0..self.vsize)
+                .map(|y| {
+                    scope.spawn(move || {
+                        let mut row = Vec::with_capacity(self.hsize);
+                        for x in 0..self.hsize {
+                            let ray = self.ray_for_pixel(x as f64, y as f64);
+                            row.push(color_at(world, &ray, MAX_RECURSION_DEPTH));
+                        }
+                        (y, row)
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("render thread panicked"))
+                .collect()
+        });
+        // Single-threaded write — no sharing of &mut image
+        for (y, row) in rows {
+            for (x, color) in row.into_iter().enumerate() {
                 image.write_pixel(x, y, color);
             }
         }
