@@ -1,0 +1,1 @@
+Casts a refracted ray through the surface and returns that color scaled by transparency (or black on opacity, TIR, or recursion limit)

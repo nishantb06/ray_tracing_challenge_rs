@@ -1,0 +1,1 @@
+Casts a reflected ray from the hit and returns that color scaled by the material’s reflectivity (or black if not reflective / recursion exhausted)
