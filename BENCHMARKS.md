@@ -19,5 +19,10 @@ commit :273f6e41d6ee0a3cc0d9b19de3e80718038adb5a
 
 #### Letting Rayon handle the multi threading since its dynamic work stealing algo will be better for uneven work while ray tracing. Each pixel will not have the same work
 ##### Speedup (6x)
-[benchmark] rendered 400x200 sphere scene to PPM 
-in 52.241ms (1531.4 pixels/ms)
+commit : 5d3a6999c7d09ba072affec119ee3f301f368eaf
+[benchmark] rendered 400x200 sphere scene to PPM in 52.241ms (1531.4 pixels/ms)
+
+#### Canvas exposes a mutable pixel slice and the result of the computations is written there directly avoiding double allocations of memory
+##### Speedup (6.25x)
+[benchmark] rendered 400x200 sphere scene to PPM in 51.271ms (1560.3 pixels/ms)
+

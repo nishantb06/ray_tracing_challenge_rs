@@ -1,4 +1,4 @@
-use crate::canvas::{Canvas,Color};
+use crate::canvas::Canvas;
 use crate::matrix::Matrix;
 use crate::ray::Ray;
 use crate::tuple::Tuple;
@@ -73,22 +73,21 @@ impl Camera {
 
     pub fn render(&self, world: &World) -> Canvas {
         let mut image = Canvas::new(self.hsize, self.vsize);
-        
-        let coordinates: Vec<(usize, usize)> = (0..self.hsize)
-            .flat_map(|x| (0..self.vsize).map(move |y| (x, y)))
+
+        // Row-major order to match Canvas pixel layout (index = y * width + x).
+        let coordinates: Vec<(usize, usize)> = (0..self.vsize)
+            .flat_map(|y| (0..self.hsize).map(move |x| (x, y)))
             .collect();
 
-        let colors: Vec<Color> = coordinates
-            .par_iter()
-            .map(|&(x, y)| {
+        image
+            .pixels_mut()
+            .par_iter_mut()
+            .zip(coordinates.par_iter())
+            .for_each(|(pixel, &(x, y))| {
                 let ray = self.ray_for_pixel(x as f64, y as f64);
-                color_at(world, &ray, MAX_RECURSION_DEPTH)
-            })
-            .collect();
+                *pixel = color_at(world, &ray, MAX_RECURSION_DEPTH);
+            });
 
-        for (&(x, y), color) in coordinates.iter().zip(colors) {
-            image.write_pixel(x, y, color);
-        }
         image
     }
 }
