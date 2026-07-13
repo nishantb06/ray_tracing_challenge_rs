@@ -76,11 +76,11 @@ fn main() {
     )];
 
     let mut camera = Camera::new(1000, 500, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(0.0, 1.5, -5.0),
         &Tuple::point(0.0, 1.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let canvas = camera.render(&world);
     let ppm = canvas.canvas_to_ppm();

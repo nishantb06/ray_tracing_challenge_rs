@@ -75,11 +75,11 @@ fn main() {
     )];
 
     let mut camera = Camera::new(800, 600, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(2.4, 1.1, -3.4),
         &Tuple::point(0.0, 0.45, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let path = "media/images_ppm/hex_cone.ppm";
     std::fs::write(path, camera.render(&world).canvas_to_ppm()).expect("write ppm");

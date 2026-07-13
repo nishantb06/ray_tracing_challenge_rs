@@ -752,6 +752,7 @@ name = "ray_tracing_challenge_rs"
 version = "0.1.0"
 dependencies = [
  "image",
+ "rayon",
 ]
 
 [[package]]

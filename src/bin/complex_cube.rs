@@ -31,11 +31,11 @@ fn main() {
     // camera
     // ======================================================
     let mut camera = Camera::new(100, 100, 0.785);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(-6.0, 6.0, -10.0),
         &Tuple::point(6.0, 0.0, 6.0),
         &Tuple::vector(-0.45, 1.0, 0.0),
-    );
+    ));
 
     // ======================================================
     // world + light sources

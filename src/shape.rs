@@ -15,6 +15,7 @@ pub struct ShapeData {
     pub transform: Matrix,
     pub material: Material,
     pub transform_inverse: Matrix,  // cache this!
+    pub transform_inverse_transpose: Matrix,
     pub parent: Option<u64>,
 }
 
@@ -22,22 +23,25 @@ impl ShapeData {
     pub fn new() -> Self {
         let transform = Matrix::identity(4);
         let transform_inverse = Matrix::identity(4);
+        let transform_inverse_transpose = Matrix::identity(4);
         ShapeData {
             id: NEXT_SHAPE_ID.fetch_add(1, Ordering::Relaxed),
             transform,
             material: Material::new(),
             transform_inverse,
+            transform_inverse_transpose,
             parent: None,
         }
     }
     pub fn set_transform(&mut self, t: Matrix) {
         self.transform_inverse = t.inverse_gauss_jordan();
+        self.transform_inverse_transpose = self.transform_inverse.transpose();
         self.transform = t;
     }
 }
 
 
-pub trait Shape: Debug {
+pub trait Shape: Debug + Send + Sync {
     fn shape_data(&self) -> &ShapeData;
     fn shape_data_mut(&mut self) -> &mut ShapeData;
 
@@ -57,7 +61,7 @@ pub trait Shape: Debug {
         let local_point = &sd.transform_inverse * world_point;
         // default: no hit info, so pass None
         let local_normal = self.local_normal_at(&local_point, None);
-        let mut world_normal = &sd.transform_inverse.transpose() * &local_normal;
+        let mut world_normal = &sd.transform_inverse_transpose * &local_normal;
         world_normal.w = 0.0;
         world_normal.normalize()
     }
@@ -91,14 +95,14 @@ pub fn world_to_object<'a>(
 }
 
 /// Recursively transform a **object-space** normal into **world space**,
-/// walking up the parent chain. Uses cached `transform_inverse` and
-/// `transpose(transform_inverse)` ≡ transpose(inverse(transform)) on the linear part.
+/// walking up the parent chain. Uses cached `transform_inverse_transpose`
+/// ≡ transpose(inverse(transform)) on the linear part.
 pub fn normal_to_world<'a>(
     shape: &'a dyn Shape,
     resolve_parent: &impl Fn(u64) -> Option<&'a dyn Shape>,
     normal: &Tuple,
 ) -> Tuple {
-    let mut n = &shape.shape_data().transform_inverse.transpose() * normal;
+    let mut n = &shape.shape_data().transform_inverse_transpose * normal;
     n.w = 0.0;
     n = n.normalize();
     if let Some(parent_id) = shape.shape_data().parent {
@@ -134,20 +138,20 @@ pub fn shape_normal_at_with_hit<'a>(
 #[cfg(test)]
 pub mod test_support {
     use super::*;
-    use std::cell::RefCell;
+    use std::sync::Mutex;
     
 
     #[derive(Debug)]
     pub struct TestShape {
         pub data: ShapeData,
-        pub saved_ray: RefCell<Option<Ray>>,
+        pub saved_ray: Mutex<Option<Ray>>,
     }
 
     impl TestShape {
         pub fn new() -> Self {
             TestShape {
                 data: ShapeData::new(),
-                saved_ray: RefCell::new(None),
+                saved_ray: Mutex::new(None),
             }
         }
     }
@@ -157,7 +161,7 @@ pub mod test_support {
         fn shape_data_mut(&mut self) -> &mut ShapeData { &mut self.data }
 
         fn local_intersect<'a>(&'a self, local_ray: &Ray) -> Intersections<'a> {
-            *self.saved_ray.borrow_mut() = Some(local_ray.clone());
+            *self.saved_ray.lock().unwrap() = Some(local_ray.clone());
             Intersections::new(vec![])
         }
 
@@ -215,7 +219,7 @@ mod tests {
         let mut s = test_shape();
         s.set_transform(scaling(2.0, 2.0, 2.0));
         let _xs = s.intersect(&r);
-        let saved = s.saved_ray.borrow();
+        let saved = s.saved_ray.lock().unwrap();
         let saved_ray = saved.as_ref().expect("saved_ray should be set after intersect");
         assert!(saved_ray.origin.is_equal(&Tuple::point(0.0, 0.0, -2.5)));
         assert!(saved_ray.direction.is_equal(&Tuple::vector(0.0, 0.0, 0.5)));
@@ -227,7 +231,7 @@ mod tests {
         let mut s = test_shape();
         s.set_transform(translation(5.0, 0.0, 0.0));
         let _xs = s.intersect(&r);
-        let saved = s.saved_ray.borrow();
+        let saved = s.saved_ray.lock().unwrap();
         let saved_ray = saved.as_ref().expect("saved_ray should be set after intersect");
         assert!(saved_ray.origin.is_equal(&Tuple::point(-5.0, 0.0, -5.0)));
         assert!(saved_ray.direction.is_equal(&Tuple::vector(0.0, 0.0, 1.0)));

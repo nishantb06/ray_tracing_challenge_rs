@@ -93,6 +93,11 @@ impl Canvas {
         &self.pixels[idx]
     }
 
+    /// Mutable row-major pixel slice (index = y * width + x).
+    pub fn pixels_mut(&mut self) -> &mut [Color] {
+        &mut self.pixels
+    }
+
     /// Converts a color component from [0, 1] to [0, 255], clamped.
     fn scale_component(c: f64) -> u8 {
         let scaled = (c * 255.0).round();

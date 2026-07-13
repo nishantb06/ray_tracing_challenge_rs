@@ -6,3 +6,4 @@ files/
 *.obsidian
 wiki/.obsidian
 .cursor/*
+.cursor/

@@ -49,11 +49,11 @@ fn main() {
 
     // Camera is angled so it isn't face-on with any cube face; you should see a corner.
     let mut camera = Camera::new(800, 600, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(-3.0, 2.0, -4.0),
         &Tuple::point(0.0, 0.75, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let canvas = camera.render(&world);
     let ppm = canvas.canvas_to_ppm();

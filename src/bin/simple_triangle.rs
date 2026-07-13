@@ -49,11 +49,11 @@ fn main() {
 
     // Camera in front of the triangle (negative z), looking at its center.
     let mut camera = Camera::new(800, 600, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(1.0, 0.65, -3.25),
         &Tuple::point(0.0, 0.35, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let canvas = camera.render(&world);
     let path = "media/images_ppm/simple_triangle.ppm";

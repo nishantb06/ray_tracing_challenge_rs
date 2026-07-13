@@ -432,11 +432,11 @@ fn main() {
     ];
 
     let mut camera = Camera::new(1000, 700, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(-1.02, 1.10, -2.70),
         &Tuple::point(0.0, 0.52, 0.10),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     println!("Rendering stylized hand (this may take a minute)...");
     let canvas = camera.render(&world);
