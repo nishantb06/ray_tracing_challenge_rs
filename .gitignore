@@ -1,5 +1,5 @@
 /target
-*.ppm
+media/images_ppm/*.ppm
 .DS_Store
 files/
 *.obj
