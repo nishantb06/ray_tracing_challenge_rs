@@ -47,6 +47,9 @@
   ```
   `Intersection<'a>` already requires that the leaf `Shape` be `Sync` (the trait is `Debug + Send + Sync` at `src/shape.rs:40`), and `Intersection` holds only `&'a dyn Shape` plus `Option<f64>`, so the lifetime bounds already admit parallel collection. This is exactly analogous to `Camera::render`'s existing `par_iter_mut().zip(...).for_each(...)` pattern (`src/camera.rs:82-89`).
 - **Estimated return:** **High.** `Group` is touched by every ray; for a teapot with thousands of triangles this loop is the dominant inner kernel. A flat parallel map yields roughly an `N_cores` speedup before BVH is added, and still helps post-BVH for the top-level world group.
+- This backfired as well 
+Baseline : [benchmark] rendered 1000x1000 group hexagon scene to PPM in 798.787ms (1251.9 pixels/ms) 
+With optimisation: [benchmark] rendered 1000x1000 group hexagon scene to PPM in 1.724s (580.0 pixels/ms)
 
 ### 4. Parallelize `World::intersect_world` with rayon
 - **Category:** Multithreading
