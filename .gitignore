@@ -5,5 +5,5 @@ files/
 *.obj
 *.obsidian
 wiki/.obsidian
-.cursor/
 .cursor/*
+.cursor/
