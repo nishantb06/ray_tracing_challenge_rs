@@ -13,6 +13,7 @@ pub struct Camera {
     pub vsize: usize,
     pub field_of_view: f64,
     pub transform: Matrix,
+    pub transform_inverse: Matrix,
     pub pixel_size: f64,
     pub half_width: f64,
     pub half_height: f64,
@@ -29,16 +30,24 @@ impl Camera {
             (half_view * aspect, half_view)
         };
         let pixel_size = (half_width * 2.0) / hsize as f64;
+        let transform = Matrix::identity(4);
+        let transform_inverse = Matrix::identity(4);
 
         Camera {
             hsize,
             vsize,
             field_of_view,
-            transform: Matrix::identity(4),
+            transform,
+            transform_inverse,
             pixel_size,
             half_width,
             half_height,
         }
+    }
+
+    pub fn set_transform(&mut self, t: Matrix) {
+        self.transform_inverse = t.inverse_gauss_jordan();
+        self.transform = t;
     }
 
     pub fn ray_for_pixel(&self, px: f64, py: f64) -> Ray {
@@ -54,9 +63,9 @@ impl Camera {
         // using the camera matrix, transform the canvas point and the origin,
         // and then compute the ray's direction vector.
         // (remember that the canvas is at z=-1)
-        let inv = self.transform.inverse_gauss_jordan();
-        let pixel = &inv * &Tuple::point(world_x, world_y, -1.0);
-        let origin = &inv * &Tuple::point(0.0, 0.0, 0.0);
+        let inv = &self.transform_inverse;
+        let pixel = inv * &Tuple::point(world_x, world_y, -1.0);
+        let origin = inv * &Tuple::point(0.0, 0.0, 0.0);
         let direction = (&pixel - &origin).normalize();
 
         return Ray { origin, direction };
@@ -188,7 +197,7 @@ mod tests {
 
         let mut c = Camera::new(201, 101, FRAC_PI_2);
 
-        c.transform = &rotation_y(FRAC_PI_4) * &translation(0.0, -2.0, 5.0);
+        c.set_transform(&rotation_y(FRAC_PI_4) * &translation(0.0, -2.0, 5.0));
 
         let r = c.ray_for_pixel(100.0, 50.0);
 
@@ -210,7 +219,7 @@ mod tests {
         let from = Tuple::point(0.0, 0.0, -5.0);
         let to = Tuple::point(0.0, 0.0, 0.0);
         let up = Tuple::vector(0.0, 1.0, 0.0);
-        c.transform = view_transform(&from, &to, &up);
+        c.set_transform(view_transform(&from, &to, &up));
         let image = c.render(&w);
         assert!(
             image
