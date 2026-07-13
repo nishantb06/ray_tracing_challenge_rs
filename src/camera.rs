@@ -62,11 +62,47 @@ impl Camera {
     }
 
     pub fn render(&self, world: &World) -> Canvas {
+        const NUM_THREADS: usize = 8;
+        // let num_threads = std::thread::available_parallelism()
+        //     .map(|n| n.get())
+        //     .unwrap_or(8); // fallback if the count can't be determined
+        // // Can use the above instead for a dynamic number of threads, 1 thread per core.
+        // NUM_THREADS = num_threads;
+        println!("Using {} threads", NUM_THREADS);
+
         let mut image = Canvas::new(self.hsize, self.vsize);
-        for y in 0..self.vsize {
-            for x in 0..self.hsize {
-                let ray = self.ray_for_pixel(x as f64, y as f64);
-                let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
+
+        // Compute rows in parallel across a fixed pool of threads. Each thread
+        // handles an interleaved slice of rows (t, t+8, t+16, ...) for even load
+        // balancing, then returns its rows to be written into the canvas.
+        let rows: Vec<(usize, Vec<crate::canvas::Color>)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..NUM_THREADS)
+                .map(|t| {
+                    scope.spawn(move || {
+                        let mut local = Vec::new();
+                        let mut y = t;
+                        while y < self.vsize {
+                            let mut row = Vec::with_capacity(self.hsize);
+                            for x in 0..self.hsize {
+                                let ray = self.ray_for_pixel(x as f64, y as f64);
+                                row.push(color_at(world, &ray, MAX_RECURSION_DEPTH));
+                            }
+                            local.push((y, row));
+                            y += NUM_THREADS;
+                        }
+                        local
+                    })
+                })
+                .collect();
+
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().expect("render thread panicked"))
+                .collect()
+        });
+
+        for (y, row) in rows {
+            for (x, color) in row.into_iter().enumerate() {
                 image.write_pixel(x, y, color);
             }
         }

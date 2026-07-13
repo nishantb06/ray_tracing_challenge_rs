@@ -37,7 +37,7 @@ impl ShapeData {
 }
 
 
-pub trait Shape: Debug {
+pub trait Shape: Debug + Send + Sync {
     fn shape_data(&self) -> &ShapeData;
     fn shape_data_mut(&mut self) -> &mut ShapeData;
 
@@ -134,20 +134,20 @@ pub fn shape_normal_at_with_hit<'a>(
 #[cfg(test)]
 pub mod test_support {
     use super::*;
-    use std::cell::RefCell;
+    use std::sync::Mutex;
     
 
     #[derive(Debug)]
     pub struct TestShape {
         pub data: ShapeData,
-        pub saved_ray: RefCell<Option<Ray>>,
+        pub saved_ray: Mutex<Option<Ray>>,
     }
 
     impl TestShape {
         pub fn new() -> Self {
             TestShape {
                 data: ShapeData::new(),
-                saved_ray: RefCell::new(None),
+                saved_ray: Mutex::new(None),
             }
         }
     }
@@ -157,7 +157,7 @@ pub mod test_support {
         fn shape_data_mut(&mut self) -> &mut ShapeData { &mut self.data }
 
         fn local_intersect<'a>(&'a self, local_ray: &Ray) -> Intersections<'a> {
-            *self.saved_ray.borrow_mut() = Some(local_ray.clone());
+            *self.saved_ray.lock().unwrap() = Some(local_ray.clone());
             Intersections::new(vec![])
         }
 
@@ -215,7 +215,7 @@ mod tests {
         let mut s = test_shape();
         s.set_transform(scaling(2.0, 2.0, 2.0));
         let _xs = s.intersect(&r);
-        let saved = s.saved_ray.borrow();
+        let saved = s.saved_ray.lock().unwrap();
         let saved_ray = saved.as_ref().expect("saved_ray should be set after intersect");
         assert!(saved_ray.origin.is_equal(&Tuple::point(0.0, 0.0, -2.5)));
         assert!(saved_ray.direction.is_equal(&Tuple::vector(0.0, 0.0, 0.5)));
@@ -227,7 +227,7 @@ mod tests {
         let mut s = test_shape();
         s.set_transform(translation(5.0, 0.0, 0.0));
         let _xs = s.intersect(&r);
-        let saved = s.saved_ray.borrow();
+        let saved = s.saved_ray.lock().unwrap();
         let saved_ray = saved.as_ref().expect("saved_ray should be set after intersect");
         assert!(saved_ray.origin.is_equal(&Tuple::point(-5.0, 0.0, -5.0)));
         assert!(saved_ray.direction.is_equal(&Tuple::vector(0.0, 0.0, 1.0)));
