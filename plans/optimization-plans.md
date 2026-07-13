@@ -74,6 +74,32 @@
   Add `use rayon::prelude::*;` at `src/world.rs:1`.
 - **Estimated return:** **High.** `intersect_world` is invoked once per `color_at` call and again once per shadow ray (`is_shadowed_light`, `src/world.rs:75`). With 800x600 pixels x up to `MAX_RECURSION_DEPTH = 5` (`src/utils.rs:3`) this is several million calls per frame; an `N_cores` parallel speedup is significant. Combined with #3, every shape-intersection loop in the program becomes parallel.
 
+This Backfired 
+For a 2000×2000 cover scene, that's 4M pixel tasks (plus reflection/refraction/shadow rays inside each). The thread pool is already busy.
+
+What the intersect_world change adds
+
+Each color_at / shadow check calls intersect_world, which then tries to par_iter over world objects. The cover scene only has ~19 top-level shapes (1 plane, 1 glass sphere, 17 cubes). Per ray, that inner parallel loop is:
+
+~19 tiny intersection tests
+then Rayon scheduling, joining, and collecting into a Vec
+That overhead dominates the actual math.
+
+Why ~3× slower (11s → 34s)
+
+Cores already full — pixel parallelism fills the pool; nested par_iter mostly fights for the same workers and adds job-queue churn.
+Granularity too fine — parallelizing 19 cheap cube/sphere tests millions of times pays spawn/join cost for almost no speedup.
+Call volume is huge — every primary ray, every recursive bounce, every shadow ray (2 lights) hits intersect_world, so the overhead is multiplied across the whole frame.
+The optimization plan's “High” estimate assumed intersect_world was a sequential hot loop. That was true before pixel-level Rayon. After camera parallelization, this change is the same class of mistake as “one thread per pixel”: parallelizing the wrong level.
+
+When it would help
+
+A single-threaded render (no camera par_iter), or
+Worlds with hundreds/thousands of independent top-level objects per ray, where object work dwarfs scheduling cost
+Practical takeaway: keep intersect_world sequential. Parallelize at the outer level (pixels — already done), or at a coarser scene structure (e.g. BVH / large groups), not over a handful of objects inside every ray.
+
+
+
 ### 5. Early-exit shadow ray testing
 - **Category:** Both
 - **Location:** `src/world.rs:70-87` (`is_shadowed_light`/`is_shadowed`), `src/world.rs:49-56` (called via `intersect_world`)

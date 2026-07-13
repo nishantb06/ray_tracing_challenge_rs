@@ -16,6 +16,7 @@
 //! Individual tests:
 //!     cargo test --release --test render_benchmark benchmark_sphere_render_matches_reference -- --nocapture
 //!     cargo test --release --test render_benchmark benchmark_cover_scene_render_matches_reference -- --nocapture
+//!     cargo test --release --test render_benchmark benchmark_group_hexagon_render_matches_reference -- --nocapture
 //!
 //! To (re)generate reference images after an *intentional* change to the
 //! rendered output, run:
@@ -24,16 +25,20 @@
 use ray_tracing_challenge_rs::camera::Camera;
 use ray_tracing_challenge_rs::canvas::Color;
 use ray_tracing_challenge_rs::cube::Cube;
+use ray_tracing_challenge_rs::cylinder::Cylinder;
+use ray_tracing_challenge_rs::group::Group;
 use ray_tracing_challenge_rs::light::PointLight;
 use ray_tracing_challenge_rs::material::Material;
 use ray_tracing_challenge_rs::matrix::Matrix;
 use ray_tracing_challenge_rs::plane::Plane;
 use ray_tracing_challenge_rs::shape::Shape;
 use ray_tracing_challenge_rs::sphere::Sphere;
-use ray_tracing_challenge_rs::transformation::{rotation_x, scaling, translation, view_transform};
+use ray_tracing_challenge_rs::transformation::{
+    rotation_x, rotation_y, rotation_z, scaling, translation, view_transform,
+};
 use ray_tracing_challenge_rs::tuple::Tuple;
 use ray_tracing_challenge_rs::world::World;
-use std::f64::consts::FRAC_PI_3;
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use std::time::Instant;
 
 /// Resolution of the sphere benchmark render. Kept fixed so the reference image
@@ -45,6 +50,10 @@ const SPHERE_HEIGHT: usize = 200;
 const COVER_WIDTH: usize = 2000;
 const COVER_HEIGHT: usize = 2000;
 
+/// Resolution of the group-hexagon benchmark (matches `src/bin/group_hexagon.rs`).
+const HEXAGON_WIDTH: usize = 1000;
+const HEXAGON_HEIGHT: usize = 1000;
+
 const SPHERE_REFERENCE_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/benchmark_sphere.ppm"
@@ -53,6 +62,11 @@ const SPHERE_REFERENCE_PATH: &str = concat!(
 const COVER_REFERENCE_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/cover_scene.ppm"
+);
+
+const HEXAGON_REFERENCE_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/group_hexagon.ppm"
 );
 
 /// Builds the fixed sphere benchmark scene: one purple sphere lit by a single
@@ -259,6 +273,69 @@ fn build_cover_scene() -> (Camera, World) {
     (camera, world)
 }
 
+const HEX_COLOR: Color = Color {
+    red: 0.2,
+    green: 0.8,
+    blue: 1.0,
+};
+
+fn hexagon_corner() -> Sphere {
+    let mut corner = Sphere::new();
+    corner.set_transform(&translation(0.0, 0.0, -1.0) * &scaling(0.25, 0.25, 0.25));
+    corner.material_mut().color = HEX_COLOR;
+    corner
+}
+
+fn hexagon_edge() -> Cylinder {
+    let mut edge = Cylinder::new();
+    edge.minimum = 0.0;
+    edge.maximum = 1.0;
+    edge.set_transform(
+        &(&(&translation(0.0, 0.0, -1.0) * &rotation_y(-PI / 6.0)) * &rotation_z(-FRAC_PI_2))
+            * &scaling(0.25, 1.0, 0.25),
+    );
+    edge.material_mut().color = HEX_COLOR;
+    edge
+}
+
+fn hexagon_side() -> Group {
+    let mut side = Group::new();
+    side.add_child(Box::new(hexagon_corner()));
+    side.add_child(Box::new(hexagon_edge()));
+    side
+}
+
+fn hexagon() -> Group {
+    let mut hex = Group::new();
+    for n in 0..6 {
+        let mut side = hexagon_side();
+        side.set_transform(rotation_y(n as f64 * PI / 3.0));
+        hex.add_child(Box::new(side));
+    }
+    hex
+}
+
+/// Builds the group hexagon scene from `src/bin/group_hexagon.rs`.
+fn build_group_hexagon_scene() -> (Camera, World) {
+    let mut world = World::new();
+    world.lights = vec![
+        PointLight::new(Tuple::point(-10.0, 12.0, -10.0), Color::new(0.35, 0.35, 0.35)),
+        PointLight::new(Tuple::point(10.0, 12.0, -10.0), Color::new(0.35, 0.35, 0.35)),
+        PointLight::new(Tuple::point(-10.0, 12.0, 10.0), Color::new(0.35, 0.35, 0.35)),
+        PointLight::new(Tuple::point(10.0, 12.0, 10.0), Color::new(0.35, 0.35, 0.35)),
+    ];
+    world.add_shape(hexagon());
+
+    let mut camera = Camera::new(HEXAGON_WIDTH, HEXAGON_HEIGHT, FRAC_PI_3);
+    camera.set_transform(view_transform(
+        &Tuple::point(1.0, 1.25, -3.0),
+        &Tuple::point(0.0, 0.0, 0.0),
+        &Tuple::vector(0.0, 1.0, 0.0),
+    ));
+
+    (camera, world)
+}
+
 /// Parses a P3 (ASCII) PPM into `(width, height, pixel_values)`, where
 /// `pixel_values` is a flat list of the RGB integer channels in row-major order.
 /// Whitespace/line-wrapping is irrelevant since we tokenize on whitespace.
@@ -387,4 +464,27 @@ fn benchmark_cover_scene_render_matches_reference() {
         return;
     }
     assert_matches_reference(&ppm, COVER_REFERENCE_PATH);
+}
+
+#[test]
+fn benchmark_group_hexagon_render_matches_reference() {
+    let (camera, world) = build_group_hexagon_scene();
+
+    // ---- timed region: fire the scene -> PPM is created ----
+    let start = Instant::now();
+    let canvas = camera.render(&world);
+    let ppm = canvas.canvas_to_ppm();
+    let elapsed = start.elapsed();
+    // --------------------------------------------------------
+
+    println!(
+        "[benchmark] rendered {HEXAGON_WIDTH}x{HEXAGON_HEIGHT} group hexagon scene to PPM in {elapsed:.3?} \
+         ({:.1} pixels/ms)",
+        (HEXAGON_WIDTH * HEXAGON_HEIGHT) as f64 / elapsed.as_secs_f64() / 1000.0
+    );
+
+    if maybe_update_reference(HEXAGON_REFERENCE_PATH, &ppm) {
+        return;
+    }
+    assert_matches_reference(&ppm, HEXAGON_REFERENCE_PATH);
 }
