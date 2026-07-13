@@ -81,11 +81,11 @@ fn main() {
 
     // Camera from above, looking down at the center
     let mut camera = Camera::new(800, 800, 0.8);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(0.0, 10.0, 0.0),
         &Tuple::point(0.0, 0.0, 0.0),
         &Tuple::vector(0.0, 0.0, -1.0), // "up" in image is -z so hexagon orientation looks right
-    );
+    ));
 
     let canvas = camera.render(&world);
     let ppm = canvas.canvas_to_ppm();

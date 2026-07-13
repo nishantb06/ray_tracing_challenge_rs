@@ -58,11 +58,11 @@ fn build_scene() -> (Camera, World) {
     )];
 
     let mut camera = Camera::new(WIDTH, HEIGHT, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(0.0, 0.0, -5.0),
         &Tuple::point(0.0, 0.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     (camera, world)
 }

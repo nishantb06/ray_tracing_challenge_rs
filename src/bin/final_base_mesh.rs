@@ -61,11 +61,11 @@ fn main() {
 
     // Camera
     let mut camera = Camera::new(400, 300, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(3.0, 2.0, -6.0),
         &Tuple::point(0.0, 1.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let out = "media/images_ppm/final_base_mesh.ppm";
     std::fs::write(out, camera.render(&world).canvas_to_ppm()).expect("write ppm");

@@ -95,11 +95,11 @@ fn main() {
 
     // Narrower FOV and closer camera to show less distant floor (reduces aliasing)
     let mut camera = Camera::new(800, 400, FRAC_PI_3 / 1.8);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(0.0, 1.4, -4.5),
         &Tuple::point(0.0, 1.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let canvas = camera.render(&world);
     let ppm = canvas.canvas_to_ppm();

@@ -151,11 +151,11 @@ fn main() {
     ];
 
     let mut camera = Camera::new(1000, 750, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(-4.2, 2.4, -6.5),
         &Tuple::point(0.0, 0.85, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let out = "media/images_ppm/csg_tree_demo.ppm";
     let ppm = camera.render(&world).canvas_to_ppm();

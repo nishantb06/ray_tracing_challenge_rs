@@ -115,11 +115,11 @@ fn main() {
     )];
 
     let mut camera = Camera::new(800, 600, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(3.0, 2.2, -4.0),
         &Tuple::point(0.0, 0.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let path = "media/images_ppm/dodecahedron.ppm";
     std::fs::write(path, camera.render(&world).canvas_to_ppm()).expect("write ppm");

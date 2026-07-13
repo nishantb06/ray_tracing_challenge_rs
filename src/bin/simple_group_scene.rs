@@ -32,11 +32,11 @@ fn main() {
 
     // 4) Camera
     let mut camera = Camera::new(400, 200, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(0.0, 1.5, -5.0),
         &Tuple::point(0.0, 1.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     // 5) Render
     let canvas = camera.render(&world);

@@ -301,11 +301,11 @@ fn main() {
     ];
 
     let mut camera = Camera::new(900, 700, FRAC_PI_3);
-    camera.transform = view_transform(
+    camera.set_transform(view_transform(
         &Tuple::point(3.3, 2.4, -4.8),
         &Tuple::point(0.0, 0.0, 0.0),
         &Tuple::vector(0.0, 1.0, 0.0),
-    );
+    ));
 
     let path = "media/images_ppm/football.ppm";
     std::fs::write(path, camera.render(&world).canvas_to_ppm()).expect("write ppm");
