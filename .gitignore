@@ -5,3 +5,4 @@ files/
 *.obj
 *.obsidian
 wiki/.obsidian
+.cursor/*
