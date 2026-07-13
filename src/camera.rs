@@ -68,7 +68,12 @@ impl Camera {
         let coordinates: Vec<(usize, usize)> = (0..self.hsize)
             .flat_map(|x| (0..self.vsize).map(move |y| (x, y)))
             .collect();
-            
+        
+        let num_threads = thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        
+        let chunk_size = coordinates.len().div_ceil(num_threads);
         // let handles: Vec<_> = thread::scope(|scope| {
         //     coordinates
         //         .iter()
@@ -88,27 +93,26 @@ impl Camera {
         //     .collect();
         let colors: Vec<Color> = thread::scope(|scope| {
             let handles: Vec<_> = coordinates
-                .iter()
-                .map(|&(x, y)| {
+                .chunks(chunk_size)
+                .map(|chunk| {
                     scope.spawn(move || {
-                        let ray = self.ray_for_pixel(x as f64, y as f64);
-                        color_at(world, &ray, MAX_RECURSION_DEPTH)
+                        chunk
+                            .iter()
+                            .map(|&(x, y)| {
+                                let ray = self.ray_for_pixel(x as f64, y as f64);
+                                color_at(world, &ray, MAX_RECURSION_DEPTH)
+                            })
+                            .collect::<Vec<_>>()
                     })
                 })
                 .collect();
-        
+    
             handles
                 .into_iter()
-                .map(|handle| handle.join().unwrap())
+                .flat_map(|handle| handle.join().unwrap())
                 .collect()
         });
-        // for y in 0..self.vsize {
-        //     for x in 0..self.hsize {
-        //         let ray = self.ray_for_pixel(x as f64, y as f64);
-        //         let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
-        //         image.write_pixel(x, y, color);
-        //     }
-        // }
+
         for (&(x, y), color) in coordinates.iter().zip(colors) {
             image.write_pixel(x, y, color);
         }

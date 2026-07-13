@@ -1,0 +1,14 @@
+#### Baseline (Loop over every pixel)
+[benchmark] rendered 400x200 sphere scene to PPM in 321.789ms (248.6 pixels/ms)
+No parallelisation optimisation yet
+
+#### Each thread per pixel (commit : efec34bd067fbc415f4bed3b39059bfa8012207a)
+##### So much worse than baseline
+[benchmark] rendered 400x200 sphere scene to PPM in 47.108s (1.7 pixels/ms)
+remarks: spawning so many threads has a huge overhead cost!
+
+#### Letting a thread pool the size of the number of cores handle the computation by chunking the pixels into segments.
+##### Speed up 3.2x
+[benchmark] rendered 400x200 sphere scene to PPM in 97.434ms (821.1 pixels/ms)
+remarks: makes as many threads as the number of chunks = number of cores then work inside each thread is sequential. This has a similar baseline as the AI provided optimisation
+
