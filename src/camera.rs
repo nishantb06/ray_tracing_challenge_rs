@@ -1,9 +1,10 @@
-use crate::canvas::Canvas;
+use crate::canvas::{Canvas,Color};
 use crate::matrix::Matrix;
 use crate::ray::Ray;
 use crate::tuple::Tuple;
 use crate::world::{World, color_at};
 use crate::utils::MAX_RECURSION_DEPTH;
+use std::thread;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -63,12 +64,53 @@ impl Camera {
 
     pub fn render(&self, world: &World) -> Canvas {
         let mut image = Canvas::new(self.hsize, self.vsize);
-        for y in 0..self.vsize {
-            for x in 0..self.hsize {
-                let ray = self.ray_for_pixel(x as f64, y as f64);
-                let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
-                image.write_pixel(x, y, color);
-            }
+        
+        let coordinates: Vec<(usize, usize)> = (0..self.hsize)
+            .flat_map(|x| (0..self.vsize).map(move |y| (x, y)))
+            .collect();
+            
+        // let handles: Vec<_> = thread::scope(|scope| {
+        //     coordinates
+        //         .iter()
+        //         .map(|&(x, y)| {
+        //             scope.spawn(move || {
+        //                 let ray = self.ray_for_pixel(x as f64, y as f64);
+        //                 let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
+        //                 color
+        //             })
+        //         })
+        //         .collect::<Vec<_>>()
+        // }); // scope blocks here until all threads finish
+        
+        // let colors: Vec<Color> = handles
+        //     .into_iter()
+        //     .map(|handle| handle.join().unwrap())
+        //     .collect();
+        let colors: Vec<Color> = thread::scope(|scope| {
+            let handles: Vec<_> = coordinates
+                .iter()
+                .map(|&(x, y)| {
+                    scope.spawn(move || {
+                        let ray = self.ray_for_pixel(x as f64, y as f64);
+                        color_at(world, &ray, MAX_RECURSION_DEPTH)
+                    })
+                })
+                .collect();
+        
+            handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect()
+        });
+        // for y in 0..self.vsize {
+        //     for x in 0..self.hsize {
+        //         let ray = self.ray_for_pixel(x as f64, y as f64);
+        //         let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
+        //         image.write_pixel(x, y, color);
+        //     }
+        // }
+        for (&(x, y), color) in coordinates.iter().zip(colors) {
+            image.write_pixel(x, y, color);
         }
         image
     }
