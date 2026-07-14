@@ -7,3 +7,5 @@ files/
 wiki/.obsidian
 .cursor/*
 .cursor/
+live_server/static/
+live_server/web/node_modules/
