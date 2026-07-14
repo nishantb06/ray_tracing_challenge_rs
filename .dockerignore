@@ -1,0 +1,10 @@
+target
+media
+.git
+.cursor
+.DS_Store
+*.md
+plans
+wiki
+live_server/web/node_modules
+live_server/static

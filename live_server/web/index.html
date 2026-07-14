@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ray tracer — live</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Live ray tracer</h1>
+      <div class="controls">
+        <label>Scene
+          <select id="scene">
+            <option value="group_hexagon" selected>group_hexagon</option>
+          </select>
+        </label>
+        <label>Size
+          <select id="resolution">
+            <option value="400x400" selected>400 × 400</option>
+          </select>
+        </label>
+        <label>Mode
+          <select id="mode">
+            <option value="sequential" selected>Sequential (scanline)</option>
+            <option value="parallel">Parallel (speckled)</option>
+          </select>
+        </label>
+        <button id="start">Render</button>
+      </div>
+      <div class="status"><span id="status">Idle</span></div>
+      <progress id="bar" max="1" value="0"></progress>
+      <div id="frac"></div>
+      <canvas id="canvas" width="400" height="400"></canvas>
+    </main>
+    <script type="module" src="/src/app.ts"></script>
+  </body>
+</html>

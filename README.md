@@ -87,6 +87,12 @@ Additional renders are available in `media/images/`.
 ## Project structure
 
 ```text
+src/                  # Core ray tracer library + scene CLI bins
+live_server/          # Progressive-render WebSocket backend
+live_viewer/          # egui frontend that paints streaming pixels
+```
+
+```text
 src/
   lib.rs              # Library exports
   tuple.rs            # Points, vectors, vector ops
@@ -101,10 +107,62 @@ src/
   plane.rs
   cube.rs
   world.rs            # Scene graph + shading pipeline
-  camera.rs           # Camera model + rendering
+  camera.rs           # Camera model + rendering (+ progressive stream API)
   canvas.rs           # Pixel buffer + PPM export
   bin/                # Scene entrypoints (25+ examples)
 ```
+
+## Live progressive rendering
+
+Watch pixels fill in over a WebSocket while the tracer runs (Rust egui viewer, or any TypeScript/HTML canvas client).
+
+```bash
+# Terminal 1 — backend (group-hexagon demo at 400x400)
+cargo run -p live_server
+
+# Terminal 2 — egui viewer (scanline / sequential by default)
+cargo run -p live_viewer
+
+# Parallel fill (pixels arrive in completion order, not scan order)
+cargo run -p live_viewer -- parallel
+```
+
+Protocol (JSON): client sends `{ "type": "Start", "scene"?: "...", "width"?: N, "height"?: N, "mode": "sequential"|"parallel", "batch_size"?: N }`; server replies with `FrameStart`, batched `Pixels` (`r`/`g`/`b` as 0-255), then `FrameDone`. A TypeScript client can use the same messages with `<canvas>` + `ImageData` — no raytracer changes required.
+
+The web UI includes a **scene dropdown** (from `GET /scenes`) and a **size dropdown** (from `GET /resolutions`): `400×400` (default), `300×400`, `1200×800`, `1920×1280`, and `3840×2160` (4K). 4K streams ~8.3M pixels over JSON and will be slow — prefer parallel mode. Available scenes: `group_hexagon`, `cover_scene`, `football`, `single_glass_sphere`, `reflective_floor`. Shared builders live in `src/scenes/` and are also used by the matching CLI bins.
+
+### Web client (TypeScript + Vite)
+
+```bash
+# one-time
+cd live_server/web && npm install
+
+# HMR dev (Vite :5173 proxies /ws to the Rust server :3030)
+# Terminal 1: cargo run -p live_server
+# Terminal 2:
+npm run dev
+# open http://localhost:5173
+
+# or production-style (same origin for page + /ws):
+npm run build && cargo run -p live_server   # open http://localhost:3030
+```
+
+The same `live_server` binary serves the built page (`live_server/static/`) and the WebSocket (`/ws`). Typed protocol mirrors live in `live_server/web/src/protocol.ts`; keep them in sync with `live_server/src/protocol.rs`.
+
+### Deploy
+
+A `Dockerfile` (multi-stage: Node frontend build → Rust build → slim runtime) is included. Deploy to any platform that builds a Dockerfile and terminates TLS:
+
+```bash
+docker build -t ray-tracer-live .
+docker run -p 3030:3030 -e PORT=3030 ray-tracer-live
+```
+
+- **Fly.io:** `fly launch --no-deploy && fly deploy && fly apps open`
+- **Railway:** `railway up`
+- **Render:** connect repo, Runtime = Docker
+
+The app binds to `0.0.0.0:$PORT` (`PORT` defaults to 3030; `STATIC_DIR` defaults to `live_server/static/`). Behind a TLS-terminating proxy the browser uses `wss://`, which the proxy downgrades to plain `ws://` internally — no TLS code in the app.
 
 ## Notable scene entrypoints
 
@@ -119,7 +177,8 @@ src/
 ## Tech stack
 
 - Rust Edition 2024
-- Dependency: [`image`](https://crates.io/crates/image) for image conversion workflows
+- Workspace crates: `ray_tracing_challenge_rs`, `live_server`, `live_viewer`
+- Dependencies: [`image`](https://crates.io/crates/image) for image conversion; [`rayon`](https://crates.io/crates/rayon) for parallel pixel render; [`crossbeam-channel`](https://crates.io/crates/crossbeam-channel) for progressive streaming
 
 ## Reference
 

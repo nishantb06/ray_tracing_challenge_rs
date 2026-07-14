@@ -1,10 +1,24 @@
-use crate::canvas::Canvas;
+use crate::canvas::{Canvas, Color};
 use crate::matrix::Matrix;
 use crate::ray::Ray;
 use crate::tuple::Tuple;
 use crate::world::{World, color_at};
 use crate::utils::MAX_RECURSION_DEPTH;
+use crossbeam_channel::Sender;
 use rayon::prelude::*;
+
+#[derive(Debug, Clone)]
+pub struct PixelUpdate {
+    pub x: usize,
+    pub y: usize,
+    pub color: Color,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderMode {
+    Sequential,
+    Parallel,
+}
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -89,6 +103,37 @@ impl Camera {
             });
 
         image
+    }
+
+    /// Emit each computed pixel into `tx`. Caller owns batching/transport.
+    /// The existing `render()` is unchanged and remains the CLI/bench path.
+    pub fn render_progressive(
+        &self,
+        world: &World,
+        mode: RenderMode,
+        tx: &Sender<PixelUpdate>,
+    ) {
+        match mode {
+            RenderMode::Sequential => {
+                for y in 0..self.vsize {
+                    for x in 0..self.hsize {
+                        let ray = self.ray_for_pixel(x as f64, y as f64);
+                        let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
+                        let _ = tx.send(PixelUpdate { x, y, color });
+                    }
+                }
+            }
+            RenderMode::Parallel => {
+                let coordinates: Vec<(usize, usize)> = (0..self.vsize)
+                    .flat_map(|y| (0..self.hsize).map(move |x| (x, y)))
+                    .collect();
+                coordinates.par_iter().for_each(|&(x, y)| {
+                    let ray = self.ray_for_pixel(x as f64, y as f64);
+                    let color = color_at(world, &ray, MAX_RECURSION_DEPTH);
+                    let _ = tx.send(PixelUpdate { x, y, color });
+                });
+            }
+        }
     }
 }
 

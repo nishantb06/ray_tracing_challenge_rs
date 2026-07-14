@@ -3,6 +3,11 @@ name = "ray_tracing_challenge_rs"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["live_server", "live_viewer"]
+resolver = "2"
+
 [dependencies]
 image = "0.25.10"
 rayon = "1.11"
+crossbeam-channel = "0.5"
