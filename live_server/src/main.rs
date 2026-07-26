@@ -6,20 +6,24 @@
 //!
 //! Colors are `u8` in 0..=255 (same clamp as `Canvas::scale_component`).
 
+mod agent_state;
 mod protocol;
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    response::IntoResponse,
-    routing::get,
+    extract::{Path, Query, State},
+    response::{sse::{Event, KeepAlive, Sse}, IntoResponse},
+    routing::{get, post},
     Json, Router,
 };
+use agent_state::{AgentBus, AgentEvent};
+use async_stream::stream;
 use crossbeam_channel::unbounded;
 use futures_util::StreamExt;
 use protocol::{ClientMessage, PixelWire, RenderModeWire, ServerMessage};
 use ray_tracing_challenge_rs::camera::{PixelUpdate, RenderMode};
 use ray_tracing_challenge_rs::scenes;
-use std::net::SocketAddr;
+use std::{convert::Infallible, net::SocketAddr, path::PathBuf};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
 /// Baked-in dev path (lives next to live_server/Cargo.toml). Overridable via env for Docker.
@@ -53,12 +57,21 @@ fn default_batch_size(pixels: usize) -> usize {
 async fn main() {
     let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| DEFAULT_STATIC_DIR.into());
 
+    let agent_bus = AgentBus::default();
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/health", get(|| async { "ok" }))
         .route("/scenes", get(scenes_handler))
         .route("/resolutions", get(resolutions_handler))
+        .route("/agent/run", post(agent_start))
+        .route("/agent/ingest/{run_id}", post(agent_ingest))
+        .route("/agent/events/{run_id}", get(agent_events))
+        .route("/agent/runs", get(agent_runs))
+        .route("/agent/runs/{run_id}", get(agent_run))
+        .route("/agent/runs/{run_id}/file", get(agent_file))
+        .route("/agent/runs/{run_id}/hil", post(agent_hil))
         .fallback_service(ServeDir::new(&static_dir))
+        .with_state(agent_bus)
         .layer(CorsLayer::permissive());
 
     let port: u16 = std::env::var("PORT")
@@ -80,6 +93,116 @@ async fn main() {
         .await
         .expect("bind failed");
     axum::serve(listener, app).await.expect("server error");
+}
+
+fn agent_state_root() -> PathBuf {
+    std::env::var_os("SHAPE_COMPOSER_STATE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../state"))
+}
+
+async fn agent_ingest(
+    State(bus): State<AgentBus>,
+    Path(run_id): Path<String>,
+    Json(mut event): Json<AgentEvent>,
+) -> impl IntoResponse {
+    event.run_id = run_id;
+    bus.ingest(event).await;
+    Json(serde_json::json!({"ok": true}))
+}
+
+#[derive(serde::Deserialize)]
+struct AgentStartRequest {
+    goal: String,
+    #[serde(default = "agent_auto_mode")]
+    mode: String,
+    #[serde(default = "agent_iterations")]
+    max_iterations: u32,
+}
+fn agent_auto_mode() -> String { "auto".into() }
+fn agent_iterations() -> u32 { 25 }
+async fn agent_start(Json(request): Json<AgentStartRequest>) -> impl IntoResponse {
+    if request.goal.trim().is_empty() || !matches!(request.mode.as_str(), "auto" | "hil") {
+        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"goal and valid mode are required"}))).into_response();
+    }
+    let run_id = format!("run-{}", &uuid_like());
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let max_iterations = request.max_iterations.clamp(1, 60).to_string();
+    let spawned = tokio::process::Command::new("cargo")
+        .args(["run", "--release", "-p", "shape_composer", "--", "--goal", &request.goal, "--mode", &request.mode,
+               "--max-iterations", &max_iterations])
+        .current_dir(root)
+        .env("SHAPE_COMPOSER_RUN_ID", &run_id)
+        .env("LIVE_SERVER_URL", "http://127.0.0.1:3030")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    match spawned {
+        Ok(_) => (axum::http::StatusCode::ACCEPTED, Json(serde_json::json!({"run_id":run_id}))).into_response(),
+        Err(err) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":err.to_string()}))).into_response(),
+    }
+}
+fn uuid_like() -> String {
+    format!("{:08x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().subsec_nanos())
+}
+
+async fn agent_events(
+    State(bus): State<AgentBus>,
+    Path(run_id): Path<String>,
+) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    let (snapshot, mut receiver) = bus.snapshot_and_subscribe(&run_id).await;
+    let events = stream! {
+        for event in snapshot {
+            yield Ok(Event::default().data(serde_json::to_string(&event).unwrap_or_default()));
+        }
+        loop {
+            match receiver.recv().await {
+                Ok(event) => yield Ok(Event::default().data(serde_json::to_string(&event).unwrap_or_default())),
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    };
+    Sse::new(events).keep_alive(KeepAlive::default())
+}
+
+async fn agent_runs() -> Json<serde_json::Value> {
+    let root = agent_state_root().join("runs");
+    let mut runs = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            if let Ok(data) = std::fs::read(entry.path().join("summary.json")) {
+                if let Ok(summary) = serde_json::from_slice::<serde_json::Value>(&data) { runs.push(summary); }
+            }
+        }
+    }
+    Json(serde_json::json!({"runs": runs}))
+}
+
+async fn agent_run(Path(run_id): Path<String>) -> impl IntoResponse {
+    if run_id.contains('/') || run_id.contains("..") { return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"invalid run id"}))).into_response(); }
+    let dir = agent_state_root().join("runs").join(run_id);
+    let summary = std::fs::read(dir.join("summary.json")).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+    let files: Vec<String> = std::fs::read_dir(&dir).ok().into_iter().flatten().flatten()
+        .filter_map(|entry| entry.file_name().into_string().ok()).collect();
+    (axum::http::StatusCode::OK, Json(serde_json::json!({"summary":summary,"files":files}))).into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct AgentFileQuery { kind: String, n: u32 }
+async fn agent_file(Path(run_id): Path<String>, Query(q): Query<AgentFileQuery>) -> impl IntoResponse {
+    if run_id.contains('/') || run_id.contains("..") { return axum::http::StatusCode::BAD_REQUEST.into_response(); }
+    let ext = match q.kind.as_str() { "png" => "png", "rs" => "rs", "feedback" => "feedback.json", "diff" => "diff.patch", _ => return axum::http::StatusCode::BAD_REQUEST.into_response() };
+    let file = agent_state_root().join("runs").join(run_id).join(format!("v{:02}.{}", q.n, ext));
+    match tokio::fs::read(file).await {
+        Ok(data) => ([(axum::http::header::CONTENT_TYPE, match q.kind.as_str() { "png" => "image/png", "feedback" => "application/json", _ => "text/plain; charset=utf-8" })], data).into_response(),
+        Err(_) => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn agent_hil(Path(_run_id): Path<String>, Json(body): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    // HIL replies are persisted as events; an out-of-band runner polls this endpoint in a later phase.
+    Json(serde_json::json!({"ok": true, "received": body}))
 }
 
 async fn scenes_handler() -> Json<serde_json::Value> {

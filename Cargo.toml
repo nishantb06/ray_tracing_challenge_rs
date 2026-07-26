@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["live_server", "live_viewer"]
+members = ["live_server", "live_viewer", "shape_composer"]
 resolver = "2"
 
 [dependencies]

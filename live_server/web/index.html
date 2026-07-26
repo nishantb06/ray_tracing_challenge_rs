@@ -8,7 +8,9 @@
   </head>
   <body>
     <main>
-      <h1>Live ray tracer</h1>
+      <h1>Ray tracer studio</h1>
+      <nav class="tabs"><button id="tab-render" class="active">Live Render</button><button id="tab-agent">Agent</button></nav>
+      <section id="render-view">
       <div class="controls">
         <label>Scene
           <select id="scene">
@@ -32,6 +34,16 @@
       <progress id="bar" max="1" value="0"></progress>
       <div id="frac"></div>
       <canvas id="canvas" width="400" height="400"></canvas>
+      </section>
+      <section id="agent-view" hidden>
+        <div class="agent-controls">
+          <label>Composition goal<textarea id="agent-goal" rows="3">A human figure made of boxes and cylinders, standing with arms relaxed</textarea></label>
+          <label>Mode<select id="agent-mode"><option value="auto">Auto</option><option value="hil">Human in the loop</option></select></label>
+          <button id="agent-start">Compose</button>
+        </div>
+        <p id="agent-status">Choose a saved run or start the composer from a terminal.</p>
+        <div class="agent-layout"><aside><h2>Past runs</h2><div id="agent-runs"></div></aside><div><h2>Iterations</h2><div id="agent-gallery" class="agent-gallery"></div><article id="agent-detail"></article></div></div>
+      </section>
     </main>
     <script type="module" src="/src/app.ts"></script>
   </body>

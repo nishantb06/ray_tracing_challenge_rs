@@ -9,3 +9,4 @@ wiki/.obsidian
 .cursor/
 live_server/static/
 live_server/web/node_modules/
+state/

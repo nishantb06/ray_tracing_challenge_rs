@@ -7,6 +7,21 @@ import type {
   ScenesResponse,
   ServerMessage,
 } from "./protocol";
+import { loadRuns } from "./agent";
+
+const renderView = document.getElementById("render-view")!;
+const agentView = document.getElementById("agent-view")!;
+document.getElementById("tab-render")!.addEventListener("click", () => {
+  renderView.hidden = false; agentView.hidden = true;
+  document.getElementById("tab-render")!.classList.add("active");
+  document.getElementById("tab-agent")!.classList.remove("active");
+});
+document.getElementById("tab-agent")!.addEventListener("click", () => {
+  renderView.hidden = true; agentView.hidden = false;
+  document.getElementById("tab-agent")!.classList.add("active");
+  document.getElementById("tab-render")!.classList.remove("active");
+  void loadRuns();
+});
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
