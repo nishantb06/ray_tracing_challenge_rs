@@ -33,9 +33,12 @@ pub struct RunRequest {
     #[serde(default = "default_iterations")]
     pub max_iterations: u32,
     pub seed_prompt: Option<String>,
+    #[serde(default = "default_reference_image")]
+    pub reference_image: PathBuf,
 }
 fn default_mode() -> Mode { Mode::Auto }
 fn default_iterations() -> u32 { 25 }
+fn default_reference_image() -> PathBuf { PathBuf::from("image.png") }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -106,12 +109,23 @@ impl Gateway {
             .ok_or_else(|| anyhow!("gateway did not return text for the decision"))?;
         parse_decision_text(text)
     }
-    pub async fn perceive(&self, prompt: String, png: &[u8], schema: Value, session: &str) -> Result<PerceptionOutput> {
-        let url = format!("data:image/png;base64,{}", BASE64.encode(png));
-        let body = json!({"messages":[{"role":"user","content":[{"type":"text","text":prompt},{"type":"image_url","image_url":{"url":url}}]}],
+    pub async fn perceive(&self, prompt: String, render_png: &[u8], reference_png: &[u8], schema: Value, session: &str) -> Result<PerceptionOutput> {
+        let render_url = format!("data:image/png;base64,{}", BASE64.encode(render_png));
+        let reference_url = format!("data:image/png;base64,{}", BASE64.encode(reference_png));
+        let body = json!({"messages":[{"role":"user","content":[
+            {"type":"text","text":prompt},
+            {"type":"image_url","image_url":{"url":render_url}},
+            {"type":"image_url","image_url":{"url":reference_url}}
+        ]}],
           "provider":"gemini","agent":"composer-perception","session":session,"temperature":0.1,"max_tokens":1200,
           "response_format":{"type":"json_schema","name":"PerceptionOutput","strict":true,"schema":schema}});
         let response = self.chat(body).await?;
+        eprintln!(
+            "[perception] gateway model={} input_tokens={}",
+            response.get("model").and_then(Value::as_str).unwrap_or("unknown"),
+            response.get("input_tokens").and_then(Value::as_u64)
+                .map(|value| value.to_string()).unwrap_or_else(|| "unknown".into()),
+        );
         let payload = response.get("parsed").cloned().or_else(|| {
             response.get("text").and_then(Value::as_str).and_then(|text| serde_json::from_str(text).ok())
         }).ok_or_else(|| anyhow!("gateway did not return a PerceptionOutput payload"))?;
@@ -216,7 +230,7 @@ fn kb() -> String {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("kb");
     // scene_template.md comes first: it carries the exact import block and a
     // compile-tested program the model must start from.
-    ["scene_template.md","primitives.md","camera_and_canvas.md","composition_recipes.md"]
+    ["scene_template.md","primitives.md","groups.md","camera_and_canvas.md","composition_recipes.md"]
         .iter().filter_map(|name| fs::read_to_string(dir.join(name)).ok())
         .collect::<Vec<_>>().join("\n").chars().take(10000).collect()
 }
@@ -227,6 +241,7 @@ RESPONSE FORMAT (no JSON):\n\
 2. Exactly ONE fenced code block starting with ```rust that contains the COMPLETE compilable program, from the use statements through the final println. Never elide code or write `// ...`.\n\
 RULES:\n\
 - Copy the `use ray_tracing_challenge_rs::...` import block from the scene template VERBATIM. There is no `prelude` module and no `ray_tracer` crate; inventing imports fails the build.\n\
+- `set_transform` takes a Matrix by value: use `set_transform(translation(...))` for one transform, or `set_transform(&translation(...) * &scaling(...))` for a composition. Do not borrow a single transform and do not multiply unborrowed matrices.\n\
 - On later iterations, output the full revised program with the visual feedback applied to the PREVIOUS CODE.\n\
 - The program must render with a 400x400 camera, write the PPM with std::fs::write, and its FINAL println! must be exactly `Saved to media/images_ppm/shape_composer_scene.ppm` matching the written path.\n\
 GOAL: {goal}\nITERATION: {iteration}/{max}\n{}PREVIOUS CODE:\n{}\nLAST VISUAL FEEDBACK:\n{}\nMEMORY HINTS:\n{}\nKNOWLEDGE BASE:\n{}",
@@ -235,7 +250,7 @@ GOAL: {goal}\nITERATION: {iteration}/{max}\n{}PREVIOUS CODE:\n{}\nLAST VISUAL FE
         memory.iter().map(|m| m.descriptor.as_str()).collect::<Vec<_>>().join("\n"), kb())
 }
 fn perception_prompt(goal: &str, iteration: u32, previous: Option<&PerceptionOutput>, memory: &[MemoryItem]) -> String {
-    format!("You are the perception agent. You see a rendered PNG and must discuss only visual appearance, never Rust or code. Goal: {goal}. Iteration: {iteration}. Previous critique: {}. Memory visual hints: {}. Return goal_achieved only if a human would call it done; then critiques must be empty and suggestion_rank 100. Otherwise give concise actionable visual-only critiques such as spatial gaps, scale percentages, camera framing, silhouette, lighting.",
+    format!("You are the perception agent. You receive two PNG images in this exact order: FIRST is the current rendered scene to judge; SECOND is the visual reference image for the goal. Discuss only the FIRST image in your critique, never Rust or code. Use the SECOND image only as inspiration for composition, silhouette, pose, proportions, and dynamism; do not demand literal pixel-for-pixel copying. Goal: {goal}. Iteration: {iteration}. Previous critique: {}. Memory visual hints: {}. Return goal_achieved only if a human would call it done; then critiques must be empty and suggestion_rank 100. Otherwise give concise actionable visual-only critiques such as spatial gaps, scale percentages, camera framing, silhouette, lighting.",
         previous.map(|x| serde_json::to_string(x).unwrap()).unwrap_or_else(|| "(none)".into()), memory.iter().map(|m| m.descriptor.as_str()).collect::<Vec<_>>().join("; "))
 }
 
@@ -248,6 +263,9 @@ pub async fn run(request: RunRequest) -> Result<RunSummary> {
     atomic_write(&run_dir.join("goal.txt"), request.goal.as_bytes())?;
     let gateway = Gateway::from_env()?;
     let memory = read_memory(&request.goal);
+    let reference_path = &request.reference_image;
+    let reference_png = fs::read(reference_path)
+        .with_context(|| format!("read visual reference image {}", reference_path.display()))?;
     let max = request.max_iterations.clamp(1, MAX_ITERATIONS);
     let mut previous_code = request.seed_prompt.clone();
     let mut feedback: Option<PerceptionOutput> = None;
@@ -281,7 +299,14 @@ pub async fn run(request: RunRequest) -> Result<RunSummary> {
         };
         eprintln!("[{run_id}] iteration {n}: rendered {}", png.display());
         emit_event(&run_id, n, "RenderCompleted", json!({"png": png.display().to_string()})).await;
-        let perception = gateway.perceive(perception_prompt(&request.goal, n, feedback.as_ref(), &memory), &fs::read(&png)?, perception_schema(), &run_id).await?;
+        let perception_session = format!("{run_id}-perception");
+        let perception = gateway.perceive(
+            perception_prompt(&request.goal, n, feedback.as_ref(), &memory),
+            &fs::read(&png)?,
+            &reference_png,
+            perception_schema(),
+            &perception_session,
+        ).await?;
         atomic_write(&run_dir.join(format!("{version}.feedback.json")), &serde_json::to_vec_pretty(&perception)?)?;
         if let Some(critique) = perception.critiques.iter().find(|c| c.contains('%') || c.contains("percent")) {
             let item = MemoryItem { id: Uuid::new_v4().to_string(), kind:"pointer".into(), keywords: terms(&request.goal).into_iter().collect(), descriptor:critique.clone(), value:json!({}), source:"perception".into(), run_id:run_id.clone(), created_at:now() };
